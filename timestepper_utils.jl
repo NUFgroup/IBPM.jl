@@ -1,0 +1,200 @@
+"""
+TO DO: Optimize Ainv, RCinv
+"""
+
+
+function get_Ainv(model::IBModel{<:Grid, <:Body}, dt::Float64;
+                  lev::Int=1)
+    """
+    Construct LinearMap to solve
+        (I + dt/2 * Beta * RC) * x = b for x
+    where Beta = 1/(Re * h^2)
+
+    Compare to get_RCinv in "ib_mats.jl"
+
+    Benchmarks with nΓ = 39601
+    Original function (non-mutating DST):
+        1.611 ms (22 allocations: 2.12 MiB)
+    Original function (mutating DST):
+        1.526 ms (14 allocations: 1.51 MiB)
+    LinearMap (non-mutating)
+        1.413 ms (9 allocations: 619.25 KiB)
+    LinearMap (mutating)
+        1.281 ms (5 allocations: 192 bytes)
+    """
+
+    hc = model.grid.h * 2^( lev - 1);  # Grid size at this level
+    # Solve by transforming to and from Fourier space and scaling by evals
+    Λ̃ = 1 .+ model.mats.Λ * dt/( 2 * model.Re * hc^2 );
+
+    # give output in same size as input b (before being reshaped)
+    return LinearMap((x, b) -> Λinv_fn!(x, b, model.grid.nx, model.grid.ny, Λ̃, model.mats.dst_plan),
+                     model.grid.nΓ; issymmetric=true, ismutating=true)
+end
+
+
+function b_times!(x::Array{Float64, 2},
+                  z::Array{Float64, 2},
+                  Ainv::LinearMap,
+                  model::IBModel{UniformGrid, RigidBody{Static}},
+                  Γ::Array{Float64, 2},
+                  ψ::Array{Float64, 2},
+                  q::Array{Float64, 2})
+    """
+    %Performs one matrix multiply of B*z, where B is the matrix used to solve
+    %for the surface stresses that enforce the no-slip boundary condition.
+
+    % (B arises from an LU factorization of the full system)
+
+    Note ψ is just a dummy work array for circ2_st_vflx
+    """
+    # -- get circulation from surface stress  circ = Ainv * R * E' * z
+    #     We don't include BCs for Ainv because ET*z is compact
+    #circ = Ainv( mats.R*(mats.ET*z), dt, model );
+    mul!(Γ, Ainv, model.mats.RET*z)
+
+    #-- get vel flux from circulation
+    #vflx, _ = circ2_st_vflx( circ, model );
+    circ2_st_vflx!( ψ, q, Γ, model );
+
+    #--Interpolate onto the body and scale by h
+    #x = (model.mats.E*vflx) / model.grid.h;
+    mul!(x, model.mats.E, q)
+    rmul!(x, 1/model.grid.h)
+end
+
+
+
+# 44.733 ms (321 allocations: 48.80 MiB) for one evaluation
+function b_times!(x::Array{Float64, 2},
+                  z::Array{Float64, 2},
+                  Ainv::LinearMap,
+                  model::IBModel{MultiGrid, RigidBody{Static}},
+                  Γ::Array{Float64, 2},
+                  ψ::Array{Float64, 2},
+                  q::Array{Float64, 2})
+    """
+    %Performs one matrix multiply of B*z, where B is the matrix used to solve
+    %for the surface stresses that enforce the no-slip boundary condition.
+
+    % (B arises from an LU factorization of the full system)
+
+    Note ψ is just a dummy variable for computing velocity flux
+        Also this only uses Ainv on the first level
+    """
+
+    # --Initialize
+    grid = model.grid
+    mats = model.mats
+    m = grid.nx;
+    n = grid.ny;
+    nΓ = grid.nΓ   # Number of circulation points
+    mg = grid.mg
+
+    # -- get circulation from surface stress
+
+    # Get circ on 1st grid level
+    # TODO: in place with @view macro
+    Γ[:, 1] = Array( Ainv * (mats.RET*z) );
+    # We don't include BCs from coarse grid for Ainv because ET*z is compact
+
+    # Coarsify circulation to second grid level to get BCs for stfn
+    #Γ[:, 2] = coarsify( Γ[:,1], Γ[:,2], grid );
+    @views coarsify!( Γ[:,1], Γ[:,2], grid );
+
+    #-- get vel flux from circulation
+
+    # only need to work with 2 grid levels here
+    #vflx, _ = circ2_st_vflx( circ, 2, model);
+    circ2_st_vflx!( ψ, q, Γ, model, 2 );
+
+    #--Interpolate onto the body and scale by h
+    mul!(x, mats.E, q[:, 1])
+    rmul!(x, 1/grid.h)
+
+end
+
+
+function get_A(model::IBModel{UniformGrid, <:Body}, dt::Float64)
+    A = I - (dt/2 / (model.grid.h^2))*model.mats.Lap
+    Ainv = get_Ainv(model, dt)
+    return A, Ainv
+end
+
+function get_A(model::IBModel{MultiGrid, <:Body}, dt::Float64)
+    hc = [model.grid.h * 2^(lev-1) for lev=1:model.grid.mg]
+    A = [I - (dt/2 / (hc[lev]^2)) *model.mats.Lap for lev=1:model.grid.mg]
+    Ainv = [get_Ainv(model, dt; lev=lev) for lev=1:model.grid.mg]
+    return A, Ainv
+end
+
+
+
+
+function get_B(model::IBModel{UniformGrid, RigidBody{Static}}, dt::Float64, Ainv::LinearMap)
+    nb, nf = get_body_info(model.bodies)
+    nftot = sum(nf)
+
+    # need to build and store surface stress matrix and its inverse if at first time step
+    B = zeros( nftot, nftot );
+    # Pre-allocate arrays
+    e = zeros( nftot, 1 );         # Unit vector
+
+    # TODO: Alternative... could create a dummy state to operate on here
+    b = zeros( nftot, 1 );         # Working array
+    Γ = zeros(model.grid.nΓ, 1)    # Working array for circulation
+    ψ = zeros(model.grid.nΓ, 1)    # Working array for streamfunction
+    q = zeros(model.grid.nq, 1)    # Working array for velocity flux
+
+    for j = 1 : nftot
+        if j>1
+            e[j-1] = 0.0
+        end
+        e[j] = 1.0;
+
+        b_times!( b, e, Ainv, model, Γ, ψ, q );
+        B[:, j] = b
+    end
+    Binv = inv(B)
+    return B, Binv
+end
+
+
+# TODO: Should be able to condense with UniformGrid and set mg=1...
+function get_B(model::IBModel{MultiGrid, RigidBody{Static}}, dt::Float64, Ainv)
+    nb, nf = get_body_info(model.bodies)
+    nftot = sum(nf)
+
+    # need to build and store surface stress matrix and its inverse if at first time step
+    B = zeros( nftot, nftot );
+    # Pre-allocate arrays
+    e = zeros( nftot, 1 );         # Unit vector
+
+    # TODO: Alternative... could create a dummy state to operate on here
+    b = zeros( nftot, 1 );         # Working array
+    Γ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for circulation
+    ψ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for streamfunction
+    q = zeros(model.grid.nq, model.grid.mg)    # Working array for velocity flux
+
+    for j = 1 : nftot
+        if j>1
+            e[j-1] = 0.0
+        end
+        e[j] = 1.0;
+
+        # Only fine-grid Ainv is used here
+        b_times!( b, e, Ainv[1], model, Γ, ψ, q );
+        B[:, j] = b
+    end
+    Binv = inv(B)
+    return B, Binv
+end
+
+
+
+
+function get_AB(model::IBModel, dt::Float64)
+    A, Ainv = get_A(model, dt)
+    B, Binv = get_B(model, dt, Ainv)
+    return A, Ainv, B, Binv
+end
