@@ -27,21 +27,24 @@ function circ2_st_vflx!( ψ::AbstractArray,
          grid = model.grid
 
          for lev = ngrids:-1:1
+             # Free up some working memory... will get overridden later in curl!
+             #Γwork = @view( q[1:grid.nΓ, lev] )
+             #Γwork .= Γ[:, lev]
 
              grid.stbc .*= 0.0   # Reset boundary conditions in pre-allocated memory
+
              #--Solve Poisson problem for ψ
 
              #BCs for Poisson problem (will be overwritten if mg > 1)
+             # don't need bcs for largest grid
              if ( lev < ngrids )
                 get_stfn_BCs!( grid.stbc, @view(ψ[:, lev+1]), model );
 
                 # Solve for streamfcn
-                # TODO: in place addition with @view macro
-                ψ[:, lev] = Array( model.mats.RCinv * (Γ[:, lev] .+ sum(grid.stbc, dims=2)) )
-             else  # don't need bcs for largest grid
-             # TODO: Figure out how to use view for in-place
-                ψ[:, lev] = model.mats.RCinv * Γ[:, lev]
-                #@views mul!(ψ[:, lev], model.mats.RCinv, Γ[:, lev])
+                #  This involves an allocation, but seems to be the fastest
+                @views mul!(ψ[:, lev],  model.mats.RCinv, Γ[:, lev] + sum(grid.stbc, dims=2)[:] )
+             else
+                @views mul!(ψ[:, lev], model.mats.RCinv, Γ[:, lev])
              end
 
              #--Get velocity on first grid from stream function

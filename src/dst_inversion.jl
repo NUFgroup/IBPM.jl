@@ -9,7 +9,7 @@ end
 
 function get_dst_plan(b)
     # Generate plans needed for optimized DST inversion
-    p = 0.25*FFTW.plan_r2r(b, FFTW.RODFT00, [1, 2])
+    p = 0.25*FFTW.plan_r2r(b, FFTW.RODFT00, [1, 2], flags=FFTW.UNALIGNED)
 
     # Preallocated work array
     w = zeros(size(b))

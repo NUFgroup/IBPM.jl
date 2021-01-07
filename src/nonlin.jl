@@ -4,7 +4,7 @@
 function get_nonlin( state::IBState{UniformGrid}, prob::IBProblem )
     """
     Build the nonlinear term. Without accounting for BCs, the answer is
-    nonlin = mats.R * ( ( mats.W * gamma ) .* ( mats.Q * (q + q0) ) );
+    nonlin = mats.C' * ( ( mats.W * gamma ) .* ( mats.Q * (q + q0) ) );
     """
 
     # --parameters used in this function
@@ -17,7 +17,7 @@ function get_nonlin( state::IBState{UniformGrid}, prob::IBProblem )
 
     # the 1/hc^2 term is to convert circ to vort
     Wgam = 1/(grid.h^2) * mats.W * sol.Γ;
-    return mats.R * ( Wgam .*  (mats.Q* (state.q + state.q0)));
+    return mats.C' * ( Wgam .*  (mats.Q* (state.q + state.q0)));
 end
 
 function get_nonlin!( nonlin::AbstractArray,
@@ -25,7 +25,7 @@ function get_nonlin!( nonlin::AbstractArray,
                       prob::IBProblem )
     """
     Build the nonlinear term. Without accounting for BCs, the answer is
-    nonlin = mats.R * ( ( mats.W * gamma ) .* ( mats.Q * (q + q0) ) );
+    nonlin = mats.C' * ( ( mats.W * gamma ) .* ( mats.Q * (q + q0) ) );
 
     work.Γ4 and work.q2-3 are free for use here
     """
@@ -47,7 +47,7 @@ function get_nonlin!( nonlin::AbstractArray,
     broadcast!(+, qq0, state.q, state.q0);  # qq0 = state.q .+ state.q0
     mul!(Qqq0, mats.Q, qq0)         # Qqq0 = Q * qq0;
 
-    mul!( nonlin, mats.R, WΓ.*Qqq0 )
+    mul!( nonlin, mats.C', WΓ.*Qqq0 )
 end
 
 
@@ -58,7 +58,7 @@ function get_nonlin!( nonlin::AbstractVector,
     """
 
     Build the nonlinear term. Without accounting for BCs, the answer is
-    nonlin = mats.R * ( ( mats.W * gamma ) .* ( mats.Q * (q + q0) ) );
+    nonlin = mats.C' * ( ( mats.W * gamma ) .* ( mats.Q * (q + q0) ) );
 
     However, we need to modify the W*gamma term and the Q*(q + q0) term to
     account for circulation and velocity flux terms from the coarse grid on
@@ -118,7 +118,7 @@ function get_nonlin!( nonlin::AbstractVector,
 
     #nonlin .= mats.R * ( WΓ .*  Qqq0);
     WΓ .*= Qqq0
-    mul!( nonlin, mats.R, WΓ)
+    mul!( nonlin, mats.C', WΓ)
 end
 
 

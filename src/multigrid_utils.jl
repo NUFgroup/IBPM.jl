@@ -49,6 +49,8 @@ function coarsify!( circf::AbstractVector,
 
 end
 
+
+
 function get_stfn_BCs!( Γb::AbstractArray,
                         Γ::AbstractArray,
                         model::IBModel{MultiGrid, <:Body} )

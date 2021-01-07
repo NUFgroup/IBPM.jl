@@ -1,6 +1,41 @@
-"""
-TO DO: Optimize Ainv, RCinv
-"""
+mutable struct WorkingMemory
+    q1::AbstractArray
+    q2::AbstractArray
+    q3::AbstractArray
+    q4::AbstractArray
+    Γ1::AbstractArray
+    Γ2::AbstractArray
+    Γ3::AbstractArray
+    bc::AbstractArray
+end
+
+
+function init_memory(grid::UniformGrid)
+    return WorkingMemory(
+        zeros(grid.nq, 1),
+        zeros(grid.nq, 1),
+        zeros(grid.nq, 1),
+        zeros(grid.nq, 1),
+        zeros(grid.nΓ, 1),
+        zeros(grid.nΓ, 1),
+        zeros(grid.nΓ, 1),
+        zeros(grid.nΓ)
+    )
+end
+
+function init_memory(grid::MultiGrid)
+    return WorkingMemory(
+        zeros(grid.nq, grid.mg),
+        zeros(grid.nq, grid.mg),
+        zeros(grid.nq, grid.mg),
+        zeros(grid.nq, grid.mg),
+        zeros(grid.nΓ, grid.mg),
+        zeros(grid.nΓ, grid.mg),
+        zeros(grid.nΓ, grid.mg),
+        zeros(grid.nΓ)
+    )
+end
+
 
 
 function get_Ainv(model::IBModel{<:Grid, <:Body}, dt::Float64;
@@ -33,7 +68,7 @@ function get_Ainv(model::IBModel{<:Grid, <:Body}, dt::Float64;
 end
 
 
-function b_times!(x::Array{Float64, 2},
+function B_times!(x::Array{Float64, 2},
                   z::Array{Float64, 2},
                   Ainv::LinearMap,
                   model::IBModel{UniformGrid, RigidBody{Static}},
@@ -64,9 +99,8 @@ function b_times!(x::Array{Float64, 2},
 end
 
 
-
 # 44.733 ms (321 allocations: 48.80 MiB) for one evaluation
-function b_times!(x::Array{Float64, 2},
+function B_times!(x::Array{Float64, 2},
                   z::Array{Float64, 2},
                   Ainv::LinearMap,
                   model::IBModel{MultiGrid, RigidBody{Static}},
@@ -112,6 +146,8 @@ function b_times!(x::Array{Float64, 2},
     mul!(x, mats.E, q[:, 1])
     rmul!(x, 1/grid.h)
 
+    return LinearMap((x, b) -> Λinv_fn!(x, b, model.grid.nx, model.grid.ny, Λ̃, model.mats.dst_plan),
+                     model.grid.nΓ; issymmetric=true, ismutating=true)
 end
 
 
@@ -128,10 +164,8 @@ function get_A(model::IBModel{MultiGrid, <:Body}, dt::Float64)
     return A, Ainv
 end
 
-
-
-
-function get_B(model::IBModel{UniformGrid, RigidBody{Static}}, dt::Float64, Ainv::LinearMap)
+function get_B(model::IBModel{UniformGrid, RigidBody{Static}},
+               dt::Float64, Ainv::LinearMap)
     nb, nf = get_body_info(model.bodies)
     nftot = sum(nf)
 
@@ -152,16 +186,17 @@ function get_B(model::IBModel{UniformGrid, RigidBody{Static}}, dt::Float64, Ainv
         end
         e[j] = 1.0;
 
-        b_times!( b, e, Ainv, model, Γ, ψ, q );
+        B_times!( b, e, Ainv, model, Γ, ψ, q );
         B[:, j] = b
     end
     Binv = inv(B)
-    return B, Binv
+    return Binv
 end
 
 
-# TODO: Should be able to condense with UniformGrid and set mg=1...
-function get_B(model::IBModel{MultiGrid, RigidBody{Static}}, dt::Float64, Ainv)
+
+function get_B(model::IBModel{MultiGrid, RigidBody{Static}},
+               dt::Float64, Ainv)
     nb, nf = get_body_info(model.bodies)
     nftot = sum(nf)
 
@@ -183,11 +218,11 @@ function get_B(model::IBModel{MultiGrid, RigidBody{Static}}, dt::Float64, Ainv)
         e[j] = 1.0;
 
         # Only fine-grid Ainv is used here
-        b_times!( b, e, Ainv[1], model, Γ, ψ, q );
+        B_times!( b, e, Ainv[1], model, Γ, ψ, q );
         B[:, j] = b
     end
     Binv = inv(B)
-    return B, Binv
+    return Binv
 end
 
 
@@ -195,6 +230,80 @@ end
 
 function get_AB(model::IBModel, dt::Float64)
     A, Ainv = get_A(model, dt)
-    B, Binv = get_B(model, dt, Ainv)
-    return A, Ainv, B, Binv
+    Binv = get_B(model, dt, Ainv)
+    return A, Ainv, Binv
+end
+
+
+"""
+RotatingCyl functions
+"""
+
+
+function B_times!(x::AbstractArray,
+                  z::AbstractArray,
+                  Ainv::LinearMap,
+                  model::IBModel{MultiGrid, RigidBody{T}} where T<:Motion,
+                  Γ::Array{Float64, 2},
+                  ψ::Array{Float64, 2},
+                  q::Array{Float64, 2})
+    """
+    %Performs one matrix multiply of B*z, where B is the matrix used to solve
+    %for the surface stresses that enforce the no-slip boundary condition.
+
+    % (B arises from an LU factorization of the full system)
+
+    Note ψ is just a dummy variable for computing velocity flux
+        Also this only uses Ainv on the first level
+
+    7.080 ms (50 allocations: 3.34 MiB
+    3.971 ms (30 allocations: 627.05 KiB)
+    """
+
+    # --Initialize
+    grid = model.grid
+    mats = model.mats
+
+    # -- get circulation from surface stress
+    #Γ[:, 1] = Array( Ainv * (mats.RET*z) );
+    @views mul!( Γ[:, 2], mats.RET, z )  # Using Γ[:, 2] as dummy array for multiplication
+    @views mul!( Γ[:, 1], Ainv, Γ[:, 2] )
+
+    # Coarsify circulation to second grid level to get BCs for stfn
+    @views coarsify!( Γ[:,1], Γ[:,2], grid );
+
+    #-- get vel flux from circulation
+    circ2_st_vflx!( ψ, q, Γ, model, 2 );  # THIS IS THE MOST EXPENSIVE THING
+
+    #--Interpolate onto the body and scale by h
+    @views mul!(x, mats.E, q[:, 1])
+    rmul!(x, 1/grid.h)
+end
+
+
+function get_B(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion,
+               dt::Float64, Ainv)
+    nb, nf = get_body_info(model.bodies)
+    nftot = sum(nf)
+
+    # need to build and store surface stress matrix and its inverse if at first time step
+    B = zeros( nftot, nftot );
+    # Pre-allocate arrays
+    e = zeros( nftot, 1 );         # Unit vector
+
+    # TODO: Alternative... could create a dummy state to operate on here
+    b = zeros( nftot, 1 );         # Working array
+    Γ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for circulation
+    ψ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for streamfunction
+    q = zeros(model.grid.nq, model.grid.mg)    # Working array for velocity flux
+
+    # f = B*g
+    B = LinearMap((f, g) -> B_times!(f, g, Ainv[1], model, Γ, ψ, q),
+                  nftot; issymmetric=true, ismutating=true)
+
+    # solves f = B*g for g... so g = Binv * f
+    Binv = LinearMap((f, g) -> cg!(f, B, g, maxiter=5000, reltol=1e-12),
+                     nftot; issymmetric=true, ismutating=true)
+
+    return Binv
 end

@@ -8,7 +8,7 @@ function boundary_forces!(F̃b::AbstractVector,
     Dispatch based on the type of motion in the problem
     Allows precomputing regularization and interpolation for Static motions
     """
-    boundary_forces!( MotionType(prob), F̃b, qs, q0, prob)
+    boundary_forces!( MotionType(prob.model.bodies), F̃b, qs, q0, prob)
 end
 
 function boundary_forces!(::Type{Static},
@@ -17,14 +17,48 @@ function boundary_forces!(::Type{Static},
                           q0::AbstractVector,
                           prob::IBProblem)
     """
-    Solve the Poisson equation (26) for uB = 0 and bc2 = 0
+    Solve the Poisson equation (25) in Colonius & Taira (2008)
+        for uB = 0 and bc2 = 0
+
+        Bf̃ = Eq
+           = ECψ
     """
     E = prob.model.mats.E
     h = prob.model.grid.h
-    qwork = @view(prob.work.q2[:, 1])                # Working memory for in-place operations
+    # Working memory for in-place operations
+    qwork = @view(prob.work.q2[:, 1])
     broadcast!(+, qwork, qs, q0)                     # qs + q0
     mul!(F̃b, E, qwork)                               # E*(qs .+ state.q0)... using fb here as working array
     F̃b .= (1/h)*prob.Binv*F̃b                         # Allocates a small amount of memory
+end
+
+
+function boundary_forces!(::Type{T} where T <: Motion,
+                          F̃b::AbstractVector,
+                          qs::AbstractVector,
+                          q0::AbstractVector,
+                          prob::IBProblem)
+    """
+    Solve the Poisson equation (25) in Colonius & Taira (2008)
+        for bc2 = 0 with specialized situation of rotating cylinder
+
+    In this case the points don't need to move, but do have nonzero velocity
+
+        Bf̃ = Eq - ub
+           = ECψ - ub
+    """
+    E = prob.model.mats.E
+    h = prob.model.grid.h
+
+    # Working memory for in-place operations
+    F̃work = similar(F̃b)
+    qwork = @view(prob.work.q2[:, 1])
+
+    broadcast!(+, qwork, qs, q0)           # qs + q0
+    mul!(F̃work, E, qwork)                  # E*(qs .+ state.q0)
+    F̃work .-= get_ub(prob.model.bodies)*prob.model.grid.h   # Enforce no-slip conditions
+    mul!(F̃b, prob.Binv, F̃work/h);
+    #F̃b .= (1/h)*prob.Binv*F̃b               # Allocates a small amount of memory
 end
 
 
@@ -65,7 +99,7 @@ function enforce_BC!(Γs::AbstractArray,
     Dispatch based on the type of motion in the problem
     Allows precomputing regularization and interpolation for Static motions
     """
-     enforce_BC!(MotionType(prob), Γs, state, prob)
+     enforce_BC!(MotionType(prob.model.bodies), Γs, state, prob)
 end
 
 function enforce_BC!(::Type{Static},
@@ -89,6 +123,26 @@ end
 
 
 function enforce_BC!(::Type{Static},
+                     Γs::AbstractArray,
+                     state::IBState{MultiGrid},
+                     prob::IBProblem)
+    """
+    High-level version:
+        state.Γ[:, 1] .= Γs .- Array(prob.Ainv[1] * (mats.RET*fb_til_dt) )
+    """
+    Γwork = @view(prob.work.Γ3[:, 1]) # Working memory
+    RET = prob.model.mats.RET   # Precomputed R * E'
+    fb_til_dt = state.F̃b
+
+    # Low-level version:
+    state.Γ .= Γs
+    @views mul!( Γs[:, 1], RET, fb_til_dt)
+    @views mul!( Γwork, prob.Ainv[1], Γs[:, 1])  # This is the only difference with the UniformGrid version
+    state.Γ[:, 1] .-= Γwork
+end
+
+
+function enforce_BC!(::Type{V} where V<:Motion,
                      Γs::AbstractArray,
                      state::IBState{MultiGrid},
                      prob::IBProblem)
@@ -196,9 +250,7 @@ function explicit_rhs!(Γs::AbstractArray,
         rhs .+= work.Γ3
 
         # Trial circulation  Γs = Ainv * rhs
-        # TODO: use @view to do in-place multiplication
-        # Doesn't work here because of view and FFT plan for even indices... WHY??
-        Γs[:, lev] .= prob.Ainv[lev] * rhs[:, lev]
+        @views mul!(Γs[:, lev], prob.Ainv[lev], rhs[:, lev])
     end
 
     # Store nonlinear solution for use in next time step
@@ -265,7 +317,8 @@ function solve_KKT!(Γs::AbstractArray,
 end
 
 
-function advance!(state::IBState{UniformGrid},
+function advance!(t::Float64,
+                  state::IBState{UniformGrid},
                   prob::IBProblem)
     grid = prob.model.grid
 
@@ -298,7 +351,8 @@ end
 
 
 
-function advance!(state::IBState{MultiGrid},
+function advance!(t::Float64,
+                  state::IBState{MultiGrid},
                   prob::IBProblem)
     """
     After updating get_nonlin:
@@ -307,6 +361,10 @@ function advance!(state::IBState{MultiGrid},
         40.325 ms (719 allocations: 15.66 MiB)
     """
     grid = prob.model.grid
+
+    if MotionType(prob.model.bodies) != Static
+        update_coupling!(prob.model, t)
+    end
 
     # Alias working memory for notational clarity
     #   This leaves work.Γ2, Γ3 and work.q1, q2 available

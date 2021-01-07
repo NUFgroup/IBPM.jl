@@ -2,8 +2,8 @@
 
 Julia CFD package based on the Immersed Boundary Projection Method (IBPM) from Taira & Colonius (2007), with multigrid method from Colonius & Taira (2008).
 
-### Branch:
-Adding rigid-body motions
+### Branch status:
+Adding support for rigid-body motions.  So far the rotating cylinder with fixed boundary points seems to work (so modified Poisson solver is probably OK).  In process of validating against Rowley's C++ code.
 
 ### Overview
 
@@ -38,5 +38,5 @@ Compared against C++ and MATLAB implementations on benchmark case from Colonius 
 | ----------- | ----------- |
 | C++      | 700       |
 | MATLAB   | 1164      |
-| Julia (single-core)  | 488        |
-| Julia (4 threads)  |  691   |
+| Julia (single-core)  | 691        |
+| Julia (4 threads)  |  488   |

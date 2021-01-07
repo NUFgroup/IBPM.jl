@@ -1,8 +1,15 @@
 
+"""
+function get_mats(grid::T, bodies::Array{V, 1}, Re::Float64) where T <: Grid where V <: Body
+    return get_mats( MotionType(bodies), grid, bodies, Re)
+end
+"""
 
 function get_mats(grid::T, bodies::Array{V, 1}, Re::Float64) where T <: Grid where V <: Body
     """
     Initialize all the matrices needed
+
+    For Static motions, we can precompute E, E', and R*E'
 
     Correspondence with Taira & Colonius (2007)
         Note that not all matrices defined here are explicitly constructed
@@ -15,41 +22,38 @@ function get_mats(grid::T, bodies::Array{V, 1}, Re::Float64) where T <: Grid whe
             Note that H = -E' is the regularization operator
     A  - Implicit time-stepping operator for velocity flux
             A = I - (dt/2/h^2)*Lap
-    Q  - Q = [G E'] Averaging operator
+    Q  - Q = [G E'] Averaging operator??
     """
     C = get_C(grid)
-    R = C'        # Transforms velocity to flux, i.e. q = R*u
-    Lap = R*C/Re  # Laplacian
+    Lap = C'*C/Re  # Laplacian
 
     Λ = Lap_eigs(grid)
 
+    #  DOCUMENT THESE
     Q = get_Q( grid );
     W = get_W( grid );
 
-    ET = reg_mats( grid, bodies )   # ib_coupling.jl
-    E = ET';
+    # Interpolation and regularization matrices
+    E = coupling_mat( grid, bodies )   # ib_coupling.jl
 
     # Plan DST
-    #    DO YOU STILL NEED THESE AFTER CREATING OPERATORS???
     dst_plans = get_dst_plan(ones(Float64, grid.nx-1, grid.ny-1));
 
-    RCinv = get_RCinv(grid, Λ, dst_plans);
+    lap_inv = get_lap_inv(grid, Λ, dst_plans);
 
-    return IBMatrices(C, R, Lap, Λ, RCinv, Q, W, E, ET, R*ET, dst_plans)
+    return IBMatrices(C, Lap, Λ, lap_inv, Q, W, E, (E*C)', dst_plans)
 end
 
 
-struct IBMatrices
+mutable struct IBMatrices
     C::SparseArrays.SparseMatrixCSC{Float64,Int64}
-    R::SparseArrays.SparseMatrixCSC{Float64,Int64}
     Lap::SparseArrays.SparseMatrixCSC{Float64,Int64}
     Λ::Array{Float64,2}
     RCinv::LinearMap
     Q::SparseArrays.SparseMatrixCSC{Float64,Int64}
     W::SparseArrays.SparseMatrixCSC{Float64,Int64}
-    E::SparseArrays.SparseMatrixCSC{Float64,Int64}
-    ET::SparseArrays.SparseMatrixCSC{Float64,Int64}
-    RET::SparseArrays.SparseMatrixCSC{Float64,Int64}
+    E::AbstractArray
+    RET::AbstractArray
     dst_plan::Tuple{Any, Array{Float64, 2}}
 end
 
@@ -71,6 +75,15 @@ function init_model(grid::T where T <: Grid,
 end
 
 
+function update_coupling!(model::IBModel, t::Float64)
+    bodies, grid = model.bodies, model.grid
+    for j=1:length(bodies)
+        move_body!(bodies[j].xb, bodies[j].ub, bodies[j].motion, t)
+    end
+
+    model.mats.E = coupling_mat( grid, bodies )
+    model.mats.RET = (model.mats.E*model.mats.C)'
+end
 
 """
 For dispatching to Static motions

@@ -245,7 +245,7 @@ end
 
 
 
-function get_RCinv( grid::T,
+function get_lap_inv( grid::T,
                     Λ::AbstractArray,
                     dst_plan::Tuple{Any, Array{Float64, 2}}) where T <: Grid
     """

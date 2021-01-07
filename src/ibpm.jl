@@ -4,6 +4,7 @@ using LinearAlgebra
 using SparseArrays
 using FFTW
 using LinearMaps
+using IterativeSolvers
 
 import Base.Threads.@threads
 
@@ -13,7 +14,9 @@ load_plots = true
 include("dst_inversion.jl")
 
 #include("naca.jl")         # For 4-digit NACA airfoils
-include("ib_domain.jl")    # Grid, Body, and Motion, with helpful utilities
+include("ib_domain.jl")     # Grid, with helpful utilities
+include("ib_motions.jl")    # Motion types for bodies
+include("ib_bodies.jl")     # Immersed body types, with example constructors
 
 include("ib_matutils.jl")   # Helpful functions for indexing matrices
 include("ib_coupling.jl")   # Regularization and interpolation functions
