@@ -20,13 +20,13 @@ I tried parallelizing for loops in `nonlin` and `multigrid_utils` with the `@thr
 
 ### Next Steps
 
-*  Motion: add support for moving, rigid bodies.  This could be tested first with a rotating cylinder, so the regularization/interpolation matrices don't need to be recomputed (only the Poisson problem changes).  Then the "E" matrix will need to be optimized... probably this should become a parametric LinearMap that gets updated every time step.
+*  Motion: add support for moving, rigid bodies.
 *  Control: once rotating cylinders are supported, implement fluidic pinball and MIMO control
 * Fluid-structure interaction: add support for strongly-coupled method from Goza & Colonius (2018)
 * Steady-states and stability analysis with SFD and Krylov-Schur.
 * Adjoint-based optimization: start with a simpler problem in Julia (e.g. potential flow or Ginzburg-Landau).  Goals: design optimization, optimal control, sensitivity analysis, Newton-Krylov steady-state solver...
 * Automatic differentiation: what needs to happen here?  How are the requirements different from adjoints?  And what sort of ML goals should be supported?
-* Reduced-order modeling: add a parallel package for POD, DMD, Galerkin projection, LSPC, etc.
+* Reduced-order modeling: add a parallel package for POD, DMD, Galerkin projection, LSPG, etc.
 
 ### Validation
 Compared against C++ and MATLAB implementations on benchmark case from Colonius & Taira (2008).  Script to run the validation case (`cyl40.jl`) is in example folder.
@@ -35,5 +35,5 @@ Compared against C++ and MATLAB implementations on benchmark case from Colonius 
 | ----------- | ----------- |
 | C++      | 700       |
 | MATLAB   | 1164      |
-| Julia (single-core)  | 488        |
-| Julia (4 threads)  |  691   |
+| Julia (single-core)  | 691        |
+| Julia (4 threads)  |  488   |
