@@ -2,6 +2,9 @@
 
 Julia CFD package based on the Immersed Boundary Projection Method (IBPM) from Taira & Colonius (2007), with multigrid method from Colonius & Taira (2008).
 
+### Branch:
+Adding rigid-body motions
+
 ### Overview
 
 The package is generally structured after the hierarchy of the C++ package, with appropriate modifications for Julia (i.e. composite types and multiple dispatch instead of object-oriented).  
