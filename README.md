@@ -20,7 +20,7 @@ I tried parallelizing for loops in `nonlin` and `multigrid_utils` with the `@thr
 
 ### Next Steps
 
-*  Motion: add support for moving, rigid bodies.  This could be tested first with a rotating cylinder, so the regularization/interpolation matrices don't need to be recomputed (only the Poisson problem changes).  Then the "E" matrix will need to be optimized... probably this should become a parametric LinearMap that gets updated every time step.
+*  Motion: add support for moving, rigid bodies.  This could be tested first with a rotating cylinder, so the regularization/interpolation matrices don't need to be recomputed (only the Poisson problem changes).
 *  Control: once rotating cylinders are supported, implement fluidic pinball and MIMO control
 * Fluid-structure interaction: add support for strongly-coupled method from Goza & Colonius (2018)
 * Steady-states and stability analysis with SFD and Krylov-Schur.
@@ -29,11 +29,11 @@ I tried parallelizing for loops in `nonlin` and `multigrid_utils` with the `@thr
 * Reduced-order modeling: add a parallel package for POD, DMD, Galerkin projection, LSPC, etc.
 
 ### Validation
-Compared against C++ and MATLAB implementations on benchmark case from Colonius & Taira (2008).  Script to run the validation case (`cyl40.jl`) is in example folder.
+Compared against C++ and MATLAB implementations on benchmark case from Colonius & Taira (2008) with $n_b=78$ points on the cylinder.  Script to run the validation case (`cyl40.jl`) is in example folder. 
 
-| Package      | Runtime (secs) |
-| ----------- | ----------- |
-| C++      | 700       |
-| MATLAB   | 1164      |
-| Julia (single-core)  | 488        |
-| Julia (4 threads)  |  691   |
+| Package      | Runtime (secs) |  $C_D$ |
+| ----------- | ----------- | -----|
+| C++      | 700       |  1.5326  |
+| MATLAB   | 1164      | 1.5738  |
+| Julia (single-core)  | 691   |  1.5738 |
+| Julia (4 threads)  |  488   |  1.5738  |
