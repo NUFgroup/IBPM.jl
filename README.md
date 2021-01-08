@@ -33,7 +33,7 @@ Compared against C++ and MATLAB implementations on benchmark case from Colonius 
 
 | Package      | Runtime (secs) |  $C_D$ |
 | ----------- | ----------- | -----|
-| C++      | 700       |  1.5320  |
-| MATLAB   | 1164      | 1.5738  |
+| MATLAB      | 700       |  1.5738  |
+| C++   | 1164      | 1.5320  |
 | Julia (single-core)  | 691   |  1.5738 |
 | Julia (4 threads)  |  488   |  1.5738  |
