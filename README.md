@@ -2,7 +2,7 @@
 
 Julia CFD package based on the Immersed Boundary Projection Method (IBPM) from Taira & Colonius (2007), with multigrid method from Colonius & Taira (2008).
 
-### Branch status:
+### Branch status (1/7/2021):
 Adding support for rigid-body motions.  So far the rotating cylinder with fixed boundary points seems to work (so modified Poisson solver is probably OK).  In process of validating against Rowley's C++ code.
 
 ### Overview
@@ -15,11 +15,6 @@ The package is generally structured after the hierarchy of the C++ package, with
 * __State__: This is just a collection of pre-allocated arrays to store the vorticity, streamfunction, velocity flux, and body forces (including lift and drag).  It also has storage for the "memory" of the multi-step scheme for the nonlinear terms.  
 
 Once a Problem and State are defined, the basic time-stepping is to just call `advance!(state, prob)`
-
-### Current Status (12/21/2020)
-Single- and multi-grid versions have both been tested and optimized.  Currently only fixed, rigid bodies are supported and there is no support for adjoints, automatic differentiation, etc.
-
-I tried parallelizing for loops in `nonlin` and `multigrid_utils` with the `@threads` macro, but it actually ran slower (on my laptop with 4 threads).  I think this is because of shared memory issues.  BLAS should be multi-threaded by default (start julia with `-t {nproc}`)
 
 ### Next Steps
 
