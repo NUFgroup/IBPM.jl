@@ -20,35 +20,20 @@ I tried parallelizing for loops in `nonlin` and `multigrid_utils` with the `@thr
 
 ### Next Steps
 
-<<<<<<< HEAD
 *  Motion: add support for moving, rigid bodies.  This could be tested first with a rotating cylinder, so the regularization/interpolation matrices don't need to be recomputed (only the Poisson problem changes).
-=======
-*  Motion: add support for moving, rigid bodies.
->>>>>>> 8f5df7a589bfb8f858133077a1bbec81d052e77e
 *  Control: once rotating cylinders are supported, implement fluidic pinball and MIMO control
 * Fluid-structure interaction: add support for strongly-coupled method from Goza & Colonius (2018)
 * Steady-states and stability analysis with SFD and Krylov-Schur.
 * Adjoint-based optimization: start with a simpler problem in Julia (e.g. potential flow or Ginzburg-Landau).  Goals: design optimization, optimal control, sensitivity analysis, Newton-Krylov steady-state solver...
 * Automatic differentiation: what needs to happen here?  How are the requirements different from adjoints?  And what sort of ML goals should be supported?
-* Reduced-order modeling: add a parallel package for POD, DMD, Galerkin projection, LSPG, etc.
+* Reduced-order modeling: add a parallel package for POD, DMD, Galerkin projection, LSPC, etc.
 
 ### Validation
-<<<<<<< HEAD
 Compared against C++ and MATLAB implementations on benchmark case from Colonius & Taira (2008) with $n_b=78$ points on the cylinder.  Script to run the validation case (`cyl40.jl`) is in example folder. 
 
 | Package      | Runtime (secs) |  $C_D$ |
 | ----------- | ----------- | -----|
-| C++      | 700       |  1.5326  |
+| C++      | 700       |  1.5320  |
 | MATLAB   | 1164      | 1.5738  |
 | Julia (single-core)  | 691   |  1.5738 |
 | Julia (4 threads)  |  488   |  1.5738  |
-=======
-Compared against C++ and MATLAB implementations on benchmark case from Colonius & Taira (2008).  Script to run the validation case (`cyl40.jl`) is in example folder.
-
-| Package      | Runtime (secs) |
-| ----------- | ----------- |
-| C++      | 700       |
-| MATLAB   | 1164      |
-| Julia (single-core)  | 691        |
-| Julia (4 threads)  |  488   |
->>>>>>> 8f5df7a589bfb8f858133077a1bbec81d052e77e
