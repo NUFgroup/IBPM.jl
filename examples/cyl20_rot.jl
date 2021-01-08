@@ -17,19 +17,21 @@ grid = ibpm.make_grid(nx, ny, offx, offy, len; mg=mg)
 r = 0.5; # Cylinder radius
 
 # Create an array of one cylinder
-θ̇ = 0.3;
+θ̇ = 0.1;
+print("Kutta Joukouski: ")
+println(-0.5*π*θ̇)
+
 motion = ibpm.RotatingCyl(θ̇);
 
 # DEBUG this... why doesn't it work for constant rotation?
-θ̇ = 1e-3
 xc(t) = [0.0, 0.0, θ̇*t]
 uc(t) = [0.0, 0.0, θ̇]
-motion = ibpm.MotionFunction(xc, uc);
+#motion = ibpm.MotionFunction(xc, uc);
 
-cyls = [ibpm.make_cylinder( r, grid.h, 0.0, motion; n=160)];
+cyls = [ibpm.make_cylinder( r, grid.h, 0.0, motion; n=78)];
 
 # Create full IBPM problem
-Re = 40.0
+Re = 20.0
 dt = 5e-3
 
 prob = ibpm.init_prob(grid, cyls, Re, dt);
@@ -48,4 +50,4 @@ function run_sim(it_stop)
 end
 
 run_sim(1)  # First step to compile
-println(@elapsed run_sim(10000))
+println(@elapsed run_sim(1000))

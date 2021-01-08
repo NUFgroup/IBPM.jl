@@ -1,4 +1,4 @@
-include("../ibpm.jl")
+include("../src/IBPM.jl")
 
 
 # Define grid
@@ -22,7 +22,7 @@ cyls = [ibpm.make_cylinder( r, grid.h, 0.0, motion )];
 
 # Create full IBPM problem
 Re = 40.0
-dt = 1e-2
+dt = 5e-3
 
 prob = ibpm.init_prob(grid, cyls, Re, dt);
 state = ibpm.init_state(prob);
