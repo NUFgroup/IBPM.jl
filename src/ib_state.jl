@@ -66,7 +66,7 @@ mutable struct IBState{T<:Grid} <: State
         slip::Float64
 end
 
-function init_state(prob::IBProblem)
+function init_state(prob::AbstractIBProblem)
         grid = prob.model.grid
         mg = (grid isa UniformGrid) ? 1 : grid.mg  # Number of grid levels
 

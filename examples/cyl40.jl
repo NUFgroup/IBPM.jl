@@ -18,7 +18,7 @@ r = 0.5; # Cylinder radius
 
 # Create an array of one cylinder
 motion = ibpm.Static();
-cyls = [ibpm.make_cylinder( r, grid.h, 0.0, motion )];
+cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0, motion )];
 
 # Create full IBPM problem
 Re = 40.0
@@ -33,7 +33,8 @@ ibpm.base_flux!(state, grid, Uinf, α)  # Initialize irrotational base flux
 
 function run_sim(it_stop)
         for it=1:it_stop
-                ibpm.advance!(state, prob)
+                t = it*dt
+                ibpm.advance!(t, state, prob)
                 println([it, state.CD, state.CL, state.cfl])
         end
 end

@@ -99,58 +99,6 @@ function B_times!(x::Array{Float64, 2},
 end
 
 
-# 44.733 ms (321 allocations: 48.80 MiB) for one evaluation
-function B_times!(x::Array{Float64, 2},
-                  z::Array{Float64, 2},
-                  Ainv::LinearMap,
-                  model::IBModel{MultiGrid, RigidBody{Static}},
-                  Γ::Array{Float64, 2},
-                  ψ::Array{Float64, 2},
-                  q::Array{Float64, 2})
-    """
-    %Performs one matrix multiply of B*z, where B is the matrix used to solve
-    %for the surface stresses that enforce the no-slip boundary condition.
-
-    % (B arises from an LU factorization of the full system)
-
-    Note ψ is just a dummy variable for computing velocity flux
-        Also this only uses Ainv on the first level
-    """
-
-    # --Initialize
-    grid = model.grid
-    mats = model.mats
-    m = grid.nx;
-    n = grid.ny;
-    nΓ = grid.nΓ   # Number of circulation points
-    mg = grid.mg
-
-    # -- get circulation from surface stress
-
-    # Get circ on 1st grid level
-    # TODO: in place with @view macro
-    Γ[:, 1] = Array( Ainv * (mats.RET*z) );
-    # We don't include BCs from coarse grid for Ainv because ET*z is compact
-
-    # Coarsify circulation to second grid level to get BCs for stfn
-    #Γ[:, 2] = coarsify( Γ[:,1], Γ[:,2], grid );
-    @views coarsify!( Γ[:,1], Γ[:,2], grid );
-
-    #-- get vel flux from circulation
-
-    # only need to work with 2 grid levels here
-    #vflx, _ = circ2_st_vflx( circ, 2, model);
-    circ2_st_vflx!( ψ, q, Γ, model, 2 );
-
-    #--Interpolate onto the body and scale by h
-    mul!(x, mats.E, q[:, 1])
-    rmul!(x, 1/grid.h)
-
-    return LinearMap((x, b) -> Λinv_fn!(x, b, model.grid.nx, model.grid.ny, Λ̃, model.mats.dst_plan),
-                     model.grid.nΓ; issymmetric=true, ismutating=true)
-end
-
-
 function get_A(model::IBModel{UniformGrid, <:Body}, dt::Float64)
     A = I - (dt/2 / (model.grid.h^2))*model.mats.Lap
     Ainv = get_Ainv(model, dt)
@@ -164,8 +112,7 @@ function get_A(model::IBModel{MultiGrid, <:Body}, dt::Float64)
     return A, Ainv
 end
 
-function get_B(model::IBModel{UniformGrid, RigidBody{Static}},
-               dt::Float64, Ainv::LinearMap)
+function get_B(model::IBModel{UniformGrid, RigidBody{Static}}, Ainv::LinearMap)
     nb, nf = get_body_info(model.bodies)
     nftot = sum(nf)
 
@@ -195,8 +142,7 @@ end
 
 
 
-function get_B(model::IBModel{MultiGrid, RigidBody{Static}},
-               dt::Float64, Ainv)
+function get_B(model::IBModel{MultiGrid, RigidBody{Static}}, Ainv)
     nb, nf = get_body_info(model.bodies)
     nftot = sum(nf)
 
@@ -230,7 +176,7 @@ end
 
 function get_AB(model::IBModel, dt::Float64)
     A, Ainv = get_A(model, dt)
-    Binv = get_B(model, dt, Ainv)
+    Binv = get_B(model, Ainv)
     return A, Ainv, Binv
 end
 
@@ -265,9 +211,9 @@ function B_times!(x::AbstractArray,
     mats = model.mats
 
     # -- get circulation from surface stress
-    #Γ[:, 1] = Array( Ainv * (mats.RET*z) );
-    @views mul!( Γ[:, 2], mats.RET, z )  # Using Γ[:, 2] as dummy array for multiplication
-    @views mul!( Γ[:, 1], Ainv, Γ[:, 2] )
+    Γ[:, 1] = Array( Ainv * (mats.RET*z) );
+    #@views mul!( Γ[:, 2], mats.RET, z )  # Using Γ[:, 2] as dummy array for multiplication
+    #@views mul!( Γ[:, 1], Ainv, Γ[:, 2] )
 
     # Coarsify circulation to second grid level to get BCs for stfn
     @views coarsify!( Γ[:,1], Γ[:,2], grid );
@@ -281,18 +227,11 @@ function B_times!(x::AbstractArray,
 end
 
 
-function get_B(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion,
-               dt::Float64, Ainv)
+function get_B(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion, Ainv)
     nb, nf = get_body_info(model.bodies)
     nftot = sum(nf)
 
-    # need to build and store surface stress matrix and its inverse if at first time step
-    B = zeros( nftot, nftot );
-    # Pre-allocate arrays
-    e = zeros( nftot, 1 );         # Unit vector
-
     # TODO: Alternative... could create a dummy state to operate on here
-    b = zeros( nftot, 1 );         # Working array
     Γ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for circulation
     ψ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for streamfunction
     q = zeros(model.grid.nq, model.grid.mg)    # Working array for velocity flux

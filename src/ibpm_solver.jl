@@ -1,7 +1,7 @@
 function boundary_forces!(F̃b::AbstractVector,
                           qs::AbstractVector,
                           q0::AbstractVector,
-                          prob::IBProblem)
+                          prob::AbstractIBProblem)
     """
     Solve the modified Poisson equation (26)
 
@@ -15,7 +15,7 @@ function boundary_forces!(::Type{Static},
                           F̃b::AbstractVector,
                           qs::AbstractVector,
                           q0::AbstractVector,
-                          prob::IBProblem)
+                          prob::AbstractIBProblem)
     """
     Solve the Poisson equation (25) in Colonius & Taira (2008)
         for uB = 0 and bc2 = 0
@@ -37,7 +37,7 @@ function boundary_forces!(::Type{T} where T <: Motion,
                           F̃b::AbstractVector,
                           qs::AbstractVector,
                           q0::AbstractVector,
-                          prob::IBProblem)
+                          prob::AbstractIBProblem)
     """
     Solve the Poisson equation (25) in Colonius & Taira (2008)
         for bc2 = 0 with specialized situation of rotating cylinder
@@ -63,7 +63,7 @@ end
 
 
 function update_stress!(state::IBState,
-                        prob::IBProblem)
+                        prob::AbstractIBProblem)
     """
     Store surface stresses and integrated forces
 
@@ -92,7 +92,7 @@ end
 
 function enforce_BC!(Γs::AbstractArray,
                      state::IBState,
-                     prob::IBProblem)
+                     prob::AbstractIBProblem)
     """
     Update circulation to satisfy no-slip condition
 
@@ -105,7 +105,7 @@ end
 function enforce_BC!(::Type{Static},
                      Γs::AbstractArray,
                      state::IBState{UniformGrid},
-                     prob::IBProblem)
+                     prob::AbstractIBProblem)
     """
     High-level version:
         state.Γ[:, 1] .= Γs .- Array(prob.Ainv[1] * (mats.RET*fb_til_dt) )
@@ -125,7 +125,7 @@ end
 function enforce_BC!(::Type{Static},
                      Γs::AbstractArray,
                      state::IBState{MultiGrid},
-                     prob::IBProblem)
+                     prob::AbstractIBProblem)
     """
     High-level version:
         state.Γ[:, 1] .= Γs .- Array(prob.Ainv[1] * (mats.RET*fb_til_dt) )
@@ -145,7 +145,7 @@ end
 function enforce_BC!(::Type{V} where V<:Motion,
                      Γs::AbstractArray,
                      state::IBState{MultiGrid},
-                     prob::IBProblem)
+                     prob::AbstractIBProblem)
     """
     High-level version:
         state.Γ[:, 1] .= Γs .- Array(prob.Ainv[1] * (mats.RET*fb_til_dt) )
@@ -164,7 +164,7 @@ end
 
 function explicit_rhs!(Γs::AbstractArray,
                        state::IBState{UniformGrid},
-                       prob::IBProblem)
+                       prob::AbstractIBProblem)
     """
     Combine explicit Laplacian and nonlinear terms into a rhs
        return trial circulation Γs
@@ -192,7 +192,9 @@ function explicit_rhs!(Γs::AbstractArray,
     end
 
     # Store current nonlinear term
-    state.nonlin[2] .= state.nonlin[1];
+    for n=1:length(prob.scheme.β)-1
+        state.nonlin[n+1] .= state.nonlin[n];
+    end
 
     # Trial circulation  Γs = Ainv * rhs
     mul!(Γs, prob.Ainv, rhs);
@@ -202,10 +204,10 @@ end
 
 function explicit_rhs!(Γs::AbstractArray,
                        state::IBState{MultiGrid},
-                       prob::IBProblem)
+                       prob::AbstractIBProblem)
     """
     Combine explicit Laplacian and nonlinear terms into a rhs
-       return trial circulation Γs
+       update trial circulation Γs
 
     High-level version of AB2:
     rhs = A*Γ .-
@@ -254,14 +256,16 @@ function explicit_rhs!(Γs::AbstractArray,
     end
 
     # Store nonlinear solution for use in next time step
-    state.nonlin[2] .= state.nonlin[1];
+    for n=1:length(prob.scheme.β)-1
+        state.nonlin[n+1] .= state.nonlin[n];
+    end
 end
 
 
 
 function solve_KKT!(Γs::AbstractArray,
                     state::IBState{UniformGrid},
-                    prob::IBProblem)
+                    prob::AbstractIBProblem)
     """
     --- IBPM solve from Eqs (25) - (27) ---
 
@@ -287,7 +291,7 @@ end
 #   Look at circ2_st_vflx and coarsify at end
 function solve_KKT!(Γs::AbstractArray,
                     state::IBState{MultiGrid},
-                    prob::IBProblem)
+                    prob::AbstractIBProblem)
     """
     --- IBPM solve from Eqs (25) - (27) ---
 
@@ -319,7 +323,7 @@ end
 
 function advance!(t::Float64,
                   state::IBState{UniformGrid},
-                  prob::IBProblem)
+                  prob::AbstractIBProblem)
     grid = prob.model.grid
 
     # Alias working memory for notational clarity
@@ -353,7 +357,7 @@ end
 
 function advance!(t::Float64,
                   state::IBState{MultiGrid},
-                  prob::IBProblem)
+                  prob::AbstractIBProblem)
     """
     After updating get_nonlin:
         84.443 ms (1961 allocations: 76.93 MiB)
@@ -364,6 +368,7 @@ function advance!(t::Float64,
 
     if MotionType(prob.model.bodies) != Static
         update_coupling!(prob.model, t)
+        prob.Binv = get_B(prob.model, prob.Ainv)
     end
 
     # Alias working memory for notational clarity

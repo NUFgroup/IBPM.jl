@@ -1,7 +1,7 @@
 
 
 
-function get_nonlin( state::IBState{UniformGrid}, prob::IBProblem )
+function get_nonlin( state::IBState{UniformGrid}, prob::AbstractIBProblem )
     """
     Build the nonlinear term. Without accounting for BCs, the answer is
     nonlin = mats.C' * ( ( mats.W * gamma ) .* ( mats.Q * (q + q0) ) );
@@ -53,7 +53,7 @@ end
 
 function get_nonlin!( nonlin::AbstractVector,
                       state::IBState{MultiGrid},
-                      prob::IBProblem,
+                      prob::AbstractIBProblem,
                       lev::Int )
     """
 

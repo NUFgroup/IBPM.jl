@@ -78,7 +78,7 @@ end
 function update_coupling!(model::IBModel, t::Float64)
     bodies, grid = model.bodies, model.grid
     for j=1:length(bodies)
-        move_body!(bodies[j].xb, bodies[j].ub, bodies[j].motion, t)
+        move_body!(bodies[j], t)
     end
 
     model.mats.E = coupling_mat( grid, bodies )

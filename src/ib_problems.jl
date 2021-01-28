@@ -1,4 +1,6 @@
-struct IBProblem
+abstract type AbstractIBProblem end
+
+mutable struct IBProblem <: AbstractIBProblem
     model::IBModel
     scheme::ExplicitScheme
     work::WorkingMemory

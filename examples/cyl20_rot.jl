@@ -18,21 +18,20 @@ r = 0.5; # Cylinder radius
 
 # Create an array of one cylinder
 θ̇ = 0.1;
-print("Kutta Joukouski: ")
+print("Kutta-Joukouski lift: ")
 println(-0.5*π*θ̇)
 
 motion = ibpm.RotatingCyl(θ̇);
 
-# DEBUG this... why doesn't it work for constant rotation?
 xc(t) = [0.0, 0.0, θ̇*t]
 uc(t) = [0.0, 0.0, θ̇]
-#motion = ibpm.MotionFunction(xc, uc);
+motion = ibpm.MotionFunction(xc, uc);
 
-cyls = [ibpm.make_cylinder( r, grid.h, 0.0, motion; n=78)];
+cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0, motion; n=78)];
 
 # Create full IBPM problem
 Re = 20.0
-dt = 5e-3
+dt = 1e-2
 
 prob = ibpm.init_prob(grid, cyls, Re, dt);
 state = ibpm.init_state(prob);
@@ -41,13 +40,19 @@ Uinf = 1.0;   # Free-stream flow
 α = 0.0 * π/180.0;      # Angle of attack
 ibpm.base_flux!(state, grid, Uinf, α)  # Initialize irrotational base flux
 
+it_stop = 10000
+CL = zeros(it_stop)
+x1 = zeros(it_stop, 2)
+
 function run_sim(it_stop)
         for it=1:it_stop
                 t = it*dt
                 ibpm.advance!(t, state, prob)
+                CL[it] = state.CL[1]
+                x1[it, :] = prob.model.bodies[1].xb[1, :]
                 println([it, state.CD, state.CL, state.cfl])
         end
 end
 
 run_sim(1)  # First step to compile
-println(@elapsed run_sim(1000))
+println(@elapsed run_sim(it_stop))
