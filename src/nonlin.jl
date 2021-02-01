@@ -1,24 +1,6 @@
 
 
 
-function get_nonlin( state::IBState{UniformGrid}, prob::AbstractIBProblem )
-    """
-    Build the nonlinear term. Without accounting for BCs, the answer is
-    nonlin = mats.C' * ( ( mats.W * gamma ) .* ( mats.Q * (q + q0) ) );
-    """
-
-    # --parameters used in this function
-    grid = prob.model.grid
-    mats = prob.model.mats
-    m = grid.nx;
-    n = grid.ny;
-
-    #---Build Wgamma and Q(q + q0) without accounting for BCs
-
-    # the 1/hc^2 term is to convert circ to vort
-    Wgam = 1/(grid.h^2) * mats.W * sol.Γ;
-    return mats.C' * ( Wgam .*  (mats.Q* (state.q + state.q0)));
-end
 
 function get_nonlin!( nonlin::AbstractArray,
                       state::IBState{UniformGrid},

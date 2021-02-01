@@ -43,6 +43,8 @@ include("ib_state.jl")
 include("nonlin.jl")         # Functions to compute the nonlinear terms
 include("ibpm_solver.jl")    # Functions to actually advance the state
 
+include("sfd.jl")   # Selective frequency damping
+
 if load_plots
     include("plot_utils.jl")
 end

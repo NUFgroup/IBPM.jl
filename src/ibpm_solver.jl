@@ -164,7 +164,7 @@ end
 
 function explicit_rhs!(Γs::AbstractArray,
                        state::IBState{UniformGrid},
-                       prob::AbstractIBProblem)
+                       prob::IBProblem)
     """
     Combine explicit Laplacian and nonlinear terms into a rhs
        return trial circulation Γs
@@ -192,8 +192,8 @@ function explicit_rhs!(Γs::AbstractArray,
     end
 
     # Store current nonlinear term
-    for n=1:length(prob.scheme.β)-1
-        state.nonlin[n+1] .= state.nonlin[n];
+    for n=length(β):-1:2
+        state.nonlin[n] .= state.nonlin[n-1];
     end
 
     # Trial circulation  Γs = Ainv * rhs
@@ -256,8 +256,8 @@ function explicit_rhs!(Γs::AbstractArray,
     end
 
     # Store nonlinear solution for use in next time step
-    for n=1:length(prob.scheme.β)-1
-        state.nonlin[n+1] .= state.nonlin[n];
+    for n=length(prob.scheme.β):-1:2
+        state.nonlin[n] .= state.nonlin[n-1];
     end
 end
 
