@@ -30,7 +30,7 @@ dt = 5e-3
 
 prob = ibpm.init_prob(grid, cyls, Re, dt);
 state = ibpm.init_state(prob);
-"""
+
 Uinf = 1.0;   # Free-stream flow
 α = 0.0 * π/180.0;      # Angle of attack
 ibpm.base_flux!(state, grid, Uinf, α)  # Initialize irrotational base flux
@@ -51,15 +51,15 @@ function run_to_conv(ϵ)
                 CD_prev = state.CD[1]
                 ibpm.advance!(t, state, sfd_prob)
                 δCD = abs.(CD_prev .- state.CD[1])
-                println([it, state.CD, state.CL, δCD])
+                println([it, state.CD[1], state.CL[1], δCD])
         end
         return state.CD, state.CL
 end
 
 ϵ = 1e-8
 CD, CL = run_to_conv(ϵ)
-"""
-
+println(CD)
+println(CL)
 
 ibpm.save_state("output/steady.mat", state);
 ibpm.save_model("output/model.mat", prob.model);
