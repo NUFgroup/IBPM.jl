@@ -75,7 +75,8 @@ function advance!(t::Float64,
     end
 
     # Update primary state streamfunction and velocity flux
-    circ2_st_vflx!( state.ψ, state.q, state.Γ, prob.model, prob.model.grid.mg );
+    circ2_st_vflx!( state.ψ, state.q, state.Γ,
+                    sfd.ib_prob.model, sfd.ib_prob.model.grid.mg );
 
     # Store filtered RHS for use in next time step
     for n=length(β):-1:2
