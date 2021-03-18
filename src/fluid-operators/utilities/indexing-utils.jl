@@ -5,6 +5,14 @@ Utility functions for constructing sparse IBPM matrices
 # Duplicate of Matlab function
 repelem( x, N ) = Array( reshape( repeat(x, 1, N)', : ) );
 
+# Indexing helper functions (useful for accessing various operator entries,
+# called in fluid-operators/nonlin.jl and fluid-operators/lin.jl)
+x1_ind(m::Int, n::Int) = repeat(1:m-1, n-1)
+x2_ind(m::Int, n::Int) = repeat(2:m, n-1)
+y1_ind(m::Int, n::Int) = repelem(1:n-1, m-1)
+y2_ind(m::Int, n::Int) = repelem(2:n, m-1)
+
+
 function meshgrid(xin::Union{Array{Number, 1}, UnitRange{Int64}},
                   yin::Union{Array{Number, 1}, UnitRange{Int64}})
     """

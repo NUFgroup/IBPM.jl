@@ -5,44 +5,63 @@ using SparseArrays
 using FFTW
 using LinearMaps
 
+export IBPM_advance
+
+#Do we use this??
 import Base.Threads.@threads
 
-load_plots = true
+#Caution, include order matters!
+include("pre-processing/pre-processing-include.jl")
+include("fluid-domain/fluid-domain-include.jl")
+include("structure-domain/structure-domain-include.jl")
+include("fluid-operators/fluid-operators-include.jl")
+include("interface-coupling/interface-coupling-include.jl")
+include("plotting/plotting-include.jl")
+include("timestepping/timestepping-include.jl")
 
-# Optimized DST for implicit part of Laplacian
-include("dst_inversion.jl")
+function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
+    Uinf=1.0, α=0.0, T=20.0*dt, plot=false)
 
-#include("naca.jl")         # For 4-digit NACA airfoils
-include("ib_domain.jl")    # Grid, Body, and Motion, with helpful utilities
+    # MultiGrid
+    grid = make_grid(nx, ny, offx, offy, len, mg=mg)
 
-include("ib_matutils.jl")   # Helpful functions for indexing matrices
-include("ib_coupling.jl")   # Regularization and interpolation functions
-include("ib_mats.jl")       # Precompute various operators
+    #Make body
+    r = body.lengthscale
 
-# The "model" is a combination of the grid, bodies, and Reynolds number
-#   Initializing the model precomputes matrices from ib_mats.jl
-include("models.jl")
+    if body.motion == "static"
+        motion=Static()
+    end
+    cyls = [make_cylinder( r, grid.h, 0.0, motion )]
 
-# Utilities specific to multigrid formulation (e.g. coarsify)
-include("multigrid_utils.jl")
+    prob = init_prob(grid, cyls, Re, Δt);
+    state = init_state(prob);
 
-include("schemes.jl")  # Time-stepping schemes for nonlinear term
-include("timestepper_utils.jl")  # Utilities for "A" and "B" matrices... things that depend on dt
+    base_flux!(state, grid, Uinf, α)  # Initialize irrotational base flux
 
-# The "problem" combines the model with a time-stepping scheme and pre-alllocated memory
-#   in the vein of "Problems" from the DifferentialEquations.jl package
-include("ib_problems.jl")
+    timesteps = round(Int, T/Δt)
 
-# The "state" includes circulation, flux, and streamfunction, along with memory
-#    for the history of nonlinear terms (for multistep schemes)
-include("ib_state.jl")
+    run_sim(1, state, prob) #pre-compute stationary IB matrix before advancing
+    runtime = @elapsed run_sim(timesteps, state, prob) #advance to final time
+                                                        #and save runtime
 
-include("nonlin.jl")         # Functions to compute the nonlinear terms
-include("ibpm_solver.jl")    # Functions to actually advance the state
+    #plotting
+    if plot==true
+        plot_state(state, prob.model.grid)
+        plot_body(prob.model.bodies[1])
+    end
 
-if load_plots
-    include("plot_utils.jl")
+    return runtime
+
 end
 
+
+function run_sim(it_stop, state, prob)
+        for it=1:it_stop
+            advance!(state, prob)
+            if mod(it,20) == 0
+                @show (it, state.CD, state.CL, state.cfl)
+            end
+        end
+end
 
 end
