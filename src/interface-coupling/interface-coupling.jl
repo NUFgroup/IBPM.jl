@@ -1,3 +1,5 @@
+"""discrete delta function used to relate flow to structure quantities"""
+
 function delta_h( rf, rb , dr )
     """
     %take points on the flow domain (r) that are within the support
@@ -56,7 +58,10 @@ function delta_h( rf, rb , dr )
     return del_h
 end
 
-
+"""
+Use the discrete delta function to build ET, which regularizes info from the
+    immersed surface onto the flow domain
+"""
 # TODO: optimize or (better yet) make an implicit operator
 function reg_mats( grid::T, bodies::Array{<:Body, 1}; supp=6.0 ) where T <: Grid
     """
@@ -232,4 +237,89 @@ function reg_mats( grid::T, bodies::Array{<:Body, 1}; supp=6.0 ) where T <: Grid
 
     end
     return ET
+end
+
+"""
+Compute the action of the matrix, B, that is used to solve for the surface
+stresses that lead to a velocity that satisfies the no-slip BCs
+"""
+function b_times!(x::Array{Float64, 2},
+                  z::Array{Float64, 2},
+                  Ainv::LinearMap,
+                  model::IBModel{UniformGrid, RigidBody{Static}},
+                  Γ::Array{Float64, 2},
+                  ψ::Array{Float64, 2},
+                  q::Array{Float64, 2})
+    """
+    %Performs one matrix multiply of B*z, where B is the matrix used to solve
+    %for the surface stresses that enforce the no-slip boundary condition.
+
+    % (B arises from an LU factorization of the full system)
+
+    Note ψ is just a dummy work array for circ2_st_vflx
+    """
+    # -- get circulation from surface stress  circ = Ainv * R * E' * z
+    #     We don't include BCs for Ainv because ET*z is compact
+    #circ = Ainv( mats.R*(mats.ET*z), dt, model );
+    mul!(Γ, Ainv, model.mats.RET*z)
+
+    #-- get vel flux from circulation
+    #vflx, _ = circ2_st_vflx( circ, model );
+    circ2_st_vflx!( ψ, q, Γ, model );
+
+    #--Interpolate onto the body and scale by h
+    #x = (model.mats.E*vflx) / model.grid.h;
+    mul!(x, model.mats.E, q)
+    rmul!(x, 1/model.grid.h)
+end
+
+
+
+# 44.733 ms (321 allocations: 48.80 MiB) for one evaluation
+function b_times!(x::Array{Float64, 2},
+                  z::Array{Float64, 2},
+                  Ainv::LinearMap,
+                  model::IBModel{MultiGrid, RigidBody{Static}},
+                  Γ::Array{Float64, 2},
+                  ψ::Array{Float64, 2},
+                  q::Array{Float64, 2})
+    """
+    %Performs one matrix multiply of B*z, where B is the matrix used to solve
+    %for the surface stresses that enforce the no-slip boundary condition.
+
+    % (B arises from an LU factorization of the full system)
+
+    Note ψ is just a dummy variable for computing velocity flux
+        Also this only uses Ainv on the first level
+    """
+
+    # --Initialize
+    grid = model.grid
+    mats = model.mats
+    m = grid.nx;
+    n = grid.ny;
+    nΓ = grid.nΓ   # Number of circulation points
+    mg = grid.mg
+
+    # -- get circulation from surface stress
+
+    # Get circ on 1st grid level
+    # TODO: in place with @view macro
+    Γ[:, 1] = Array( Ainv * (mats.RET*z) );
+    # We don't include BCs from coarse grid for Ainv because ET*z is compact
+
+    # Coarsify circulation to second grid level to get BCs for stfn
+    #Γ[:, 2] = coarsify( Γ[:,1], Γ[:,2], grid );
+    @views coarsify!( Γ[:,1], Γ[:,2], grid );
+
+    #-- get vel flux from circulation
+
+    # only need to work with 2 grid levels here
+    #vflx, _ = circ2_st_vflx( circ, 2, model);
+    circ2_st_vflx!( ψ, q, Γ, model, 2 );
+
+    #--Interpolate onto the body and scale by h
+    mul!(x, mats.E, q[:, 1])
+    rmul!(x, 1/grid.h)
+
 end
