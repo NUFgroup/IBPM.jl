@@ -76,7 +76,6 @@ function move_body!(
     ub = body.ub
     motion = body.motion
     R = sqrt(xb[1, 1]^2 + xb[1, 2]^2)
-    println(R)
     θ = atan.(xb[:, 2], xb[:, 1])
     ub[:, 1] .= -R*motion.θ̇*sin.(θ)
     ub[:, 2] .=  R*motion.θ̇*cos.(θ)

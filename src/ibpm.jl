@@ -4,6 +4,7 @@ using LinearAlgebra
 using SparseArrays
 using FFTW
 using LinearMaps
+using IterativeSolvers
 
 export IBPM_advance
 
@@ -27,6 +28,8 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
 
     if body.motion == "static"
         motion=Static()
+    elseif body.motion == "rot_cyl"
+        motion=RotatingCyl(body.θ̇)
     end
     cyls = [make_cylinder( r, grid.h, 0.0, 0.0, motion )]
 
@@ -39,7 +42,6 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
 
     run_sim(1, state, prob) #pre-compute stationary IB matrix before advancing
     runtime = @elapsed run_sim(timesteps, state, prob) #advance to final time
-                                                        #and save runtime
 
     #plotting
     if plot==true
@@ -48,17 +50,17 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     end
 
     return runtime
-
 end
 
 
 function run_sim(it_stop, state, prob)
-        for it=1:it_stop
-            advance!(state, prob)
-            if mod(it,20) == 0
-                @show (it, state.CD, state.CL, state.cfl)
-            end
+    for it=1:it_stop
+        t = prob.scheme.dt*it
+        advance!(t, state, prob)
+        if mod(it,20) == 0
+            @show (it, state.CD, state.CL, state.cfl)
         end
+    end
 end
 
 end

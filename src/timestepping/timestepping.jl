@@ -1,5 +1,6 @@
 #Driver function that steps forward in time
-function advance!(state::IBState{UniformGrid},
+function advance!(t::Float64,
+                  state::IBState{UniformGrid},
                   prob::IBProblem)
     grid = prob.model.grid
 
@@ -34,7 +35,8 @@ function advance!(state::IBState{UniformGrid},
 end
 
 
-function advance!(state::IBState{MultiGrid},
+function advance!(t::Float64,
+                  state::IBState{MultiGrid},
                   prob::IBProblem)
     """
     After updating get_nonlin:
