@@ -55,9 +55,9 @@ function init_prob(grid::T where T <: Grid,
     mats = get_mats(grid, bodies, Re)
     model = IBModel(grid, bodies, Re, mats)
     scheme = AB2(dt)   # Explicit time-stepping for nonlinear terms
-    A, Ainv, B, Binv = get_AB(model, dt)
+    A, Ainv, Binv = get_AB(model, dt)
     work = init_memory(grid)
-    return IBProblem(model, scheme, work, A, Ainv, B, Binv)
+    return IBProblem(model, scheme, work, A, Ainv, Binv)
 end
 
 
@@ -114,24 +114,21 @@ function get_mats(grid::T, bodies::Array{V, 1}, Re::Float64) where T <: Grid whe
     Q  - Q = [G E'] Averaging operator (used in the nonlinear term)
     """
     C = get_C(grid)
-    R = C'        # Transforms velocity to flux, i.e. q = R*u
-    Lap = R*C/Re  # Laplacian
+    Lap = C'*C/Re  # Laplacian
 
     Λ = Lap_eigs(grid)
 
     Q = get_Q( grid );
     W = get_W( grid );
 
-    ET = reg_mats( grid, bodies )   # ib_coupling.jl
-    E = ET';
+    E = coupling_mat( grid, bodies )   # ib_coupling.jl
 
     # Plan DST
     #    DO YOU STILL NEED THESE AFTER CREATING OPERATORS???
     dst_plans = get_dst_plan(ones(Float64, grid.nx-1, grid.ny-1));
 
-    RCinv = get_RCinv(grid, Λ, dst_plans);
-
-    return IBMatrices(C, R, Lap, Λ, RCinv, Q, W, E, ET, R*ET, dst_plans)
+    lap_inv = get_lap_inv(grid, Λ, dst_plans);
+    return IBMatrices(C, Lap, Λ, lap_inv, Q, W, E, (E*C)', dst_plans)
 end
 
 """

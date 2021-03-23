@@ -1,5 +1,5 @@
 using Revise
-includet("../src/ibpm.jl")
+include("../src/ibpm.jl")
 using .ibpm
 
 # Define grid

@@ -4,31 +4,36 @@ Support for constructing basic bodies
 
 
 # Example body constructor
-function make_cylinder(r, h, y0, motion)
+function make_cylinder(r, h, x0, y0, motion; n=0)
     # build cylinder of radius r using flow grid spacing of h
     # (cylinder will have a spacing of 2h)
 
     circum = 2 * π * r; #  Circumference of the circle
 
     # Get # of points such that ds = 2h
-    n = Int( floor( circum / h / 2 ) );
+    if (n==0)
+        n = Int( floor( circum / h / 2 ) );
+    end
 
     int =  2*π/n ;
     spt = 0:int:(n-1)*int;
     xhat = r.*cos.(spt);
     yhat = r.*sin.(spt);
 
-    xb = [xhat  yhat.+y0];
+    xb = [xhat.+x0  yhat.+y0];
 
     # sanity check: make sure ds is equal to 2 * h
     ds = sqrt( (xhat[2] - xhat[1])^2 + (yhat[2] - yhat[1])^2 ) ;
 
-    return RigidBody(motion, xb, fill(ds, n))
+    return RigidBody(motion, xb, copy(xb), 0.0*xb, fill(ds, n))
 end
 
 
 
+
 #Why is this here?
+
+
 function make_naca(x0, N, spec, motion)
 
     # Define x-locations
@@ -51,7 +56,7 @@ function make_naca(x0, N, spec, motion)
     xb = (xe[2:end, :] .+ xe[1:end-1, :] ) ./ 2.0
     ds = sqrt.( sum( (xe[2:end, :] .- xe[1:end-1, :]).^2, dims=2) )
 
-    return RigidBody(motion, xb, ds[:, 1])
+    return RigidBody(motion, xb, copy(xb), 0.0*xb, ds[:, 1])
 end
 
 

@@ -7,9 +7,6 @@ using LinearMaps
 
 export IBPM_advance
 
-#Do we use this??
-import Base.Threads.@threads
-
 #Caution, include order matters!
 include("pre-processing/pre-processing-include.jl")
 include("fluid-domain/fluid-domain-include.jl")
@@ -31,7 +28,7 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     if body.motion == "static"
         motion=Static()
     end
-    cyls = [make_cylinder( r, grid.h, 0.0, motion )]
+    cyls = [make_cylinder( r, grid.h, 0.0, 0.0, motion )]
 
     prob = init_prob(grid, cyls, Re, Δt);
     state = init_state(prob);

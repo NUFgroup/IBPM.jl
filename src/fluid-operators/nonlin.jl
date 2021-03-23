@@ -1,25 +1,5 @@
 
 
-#Does this version get used anywhere?
-function get_nonlin( state::IBState{UniformGrid}, prob::IBProblem )
-    """
-    Build the nonlinear term. Without accounting for BCs, the answer is
-    nonlin = mats.R * ( ( mats.W * gamma ) .* ( mats.Q * (q + q0) ) );
-    """
-
-    # --parameters used in this function
-    grid = prob.model.grid
-    mats = prob.model.mats
-    m = grid.nx;
-    n = grid.ny;
-
-    #---Build Wgamma and Q(q + q0) without accounting for BCs
-
-    # the 1/hc^2 term is to convert circ to vort
-    Wgam = 1/(grid.h^2) * mats.W * sol.Γ;
-    return mats.R * ( Wgam .*  (mats.Q* (state.q + state.q0)));
-end
-
 function get_nonlin!( nonlin::AbstractArray,
                       state::IBState{UniformGrid},
                       prob::IBProblem )
@@ -47,7 +27,7 @@ function get_nonlin!( nonlin::AbstractArray,
     broadcast!(+, qq0, state.q, state.q0);  # qq0 = state.q .+ state.q0
     mul!(Qqq0, mats.Q, qq0)         # Qqq0 = Q * qq0;
 
-    mul!( nonlin, mats.R, WΓ.*Qqq0 )
+    mul!( nonlin, mats.C', WΓ.*Qqq0 )
 end
 
 
@@ -65,11 +45,6 @@ function get_nonlin!( nonlin::AbstractVector,
     the fine grid. (Note that R does not need to be modified).
 
     work.Γ3 and work.q2-3 are free for use here
-
-    Original:
-        1.946 ms (456 allocations: 8.88 MiB)
-    Optimized:
-        1.389 ms (24 allocations: 1.52 MiB)
     """
 
     # --parameters used in this function
@@ -116,9 +91,9 @@ function get_nonlin!( nonlin::AbstractVector,
 
     end
 
-    #nonlin .= mats.R * ( WΓ .*  Qqq0);
+    #nonlin .= mats.C' * ( WΓ .*  Qqq0);
     WΓ .*= Qqq0
-    mul!( nonlin, mats.R, WΓ)
+    mul!( nonlin, mats.C', WΓ)
 end
 
 

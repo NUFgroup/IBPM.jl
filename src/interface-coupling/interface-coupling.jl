@@ -62,13 +62,20 @@ end
 Use the discrete delta function to build ET, which regularizes info from the
     immersed surface onto the flow domain
 """
-# TODO: optimize or (better yet) make an implicit operator
-function reg_mats( grid::T, bodies::Array{<:Body, 1}; supp=6.0 ) where T <: Grid
+function coupling_mat( grid::T, bodies::Array{<:Body, 1}; supp=6.0 ) where T <: Grid
     """
-    Return the regularization matrix ET (scaled to be the transpose of E),
+    Return the regularization matrix E' (scaled to be the transpose of E),
     which takes quantities on the IB and smears them to the flow domain.
-
-    This depends on the position of the body points, but not their velocities
+    NOTE: E should only be precomputed for Static motions!
+    E is the interpolation matrix, which goes from the flow domain to the IB
+        This depends on the position of the body points, but not their velocities
+    200 x 200 grid
+    Original:
+        99.829 ms (19585 allocations: 116.02 MiB)
+    Streamlined:
+        26.615 ms (15461 allocations: 97.54 MiB)
+    Direct CSC construction:
+        15.914 ms (15902 allocations: 29.88 MiB)
     """
     m = grid.nx;
     n = grid.ny;
@@ -79,247 +86,83 @@ function reg_mats( grid::T, bodies::Array{<:Body, 1}; supp=6.0 ) where T <: Grid
     del = grid.h;  # Size of uniform grid cell
 
     # Get size of ET
-    nrows = get_velx_ind( m-1, n, grid ) +
-        get_vely_ind( m, n-1, grid );
+    # Also need later: y index starts after all the x-vels
+    n_add = get_velx_ind( m-1, n, grid )
+    nrows = n_add + get_vely_ind( m, n-1, grid );
     nb, nf = get_body_info(bodies)
     ncols = sum(nf);
 
-    ET = spzeros( nrows, ncols );
-    ncol_tally = 0; # Used to keep a tally of the column we're on
+    tally = 0; # Used to keep a tally of the column we're on
+
+    # for x-vels: x and y points on physical grid (for fluid domain)
+    xu = (del : del : (m-1) * del) .- offx;
+    yu = (del/2 : del : (n-1/2) * del ) .- offy;
+
+    # for y-vels: points on physical grid (for fluid domain)
+    xv = (del/2. : del : (m-1/2) * del ) .- offx;
+    yv = (del : del : (n-1)*del ) .- offy;
+
+    colptr = ones(Int64, ncols+1);
+    rowval = Array{Int64}(undef, 0, 1);
+    nzval = Array{Float64}(undef, 0, 1);
 
     for i = 1:length(bodies)
 
-        xb = bodies[i].xb;
+        # x and y points on physical grid (for IB)
+        xb_x = bodies[i].xb[:, 1];
+        xb_y = bodies[i].xb[:, 2];
+
+        # For each IB point, add nonzero weights...
         #--rows corresponding to x-vels
+        for j = 1:nb[i]
+            # Find x-points of fluid domain within support
+            ind_x =  findall( abs.( xu .- xb_x[j] ) .<= supp * del )
 
-            #x and y points on physical grid (for fluid domain)
-            xu = (del : del : (m-1)*del ) .- offx;
-            yu = (del/2 : del : (n-1/2) * del ) .- offy;
+            # Find y-points within support
+            ind_y = findall( abs.( yu .- xb_y[j] ) .<= supp * del )
 
-            # x and y points on physical grid (for IB)
-            xb_x = xb[:, 1];
-            xb_y = xb[:, 2];
+            # rows of ET to add to (first grid level)
+            velx_ind = (m-1).*(ind_y' .- 1) .+ ind_x
 
-            # find x points within support
-            xu_r = repeat( xu, length(xb_x) );
-            xb_rx = repelem( xb_x, length(xu) )
-            ind_supp_x = ( abs.( xu_r .- xb_rx ) .<= supp * del )
+            # entries to put into columns
+            del_h = delta_h( xu[ind_x], xb_x[j], del) .*
+                    delta_h( yu[ind_y], xb_y[j], del)'
 
-            # Get index of these points for fluid grid
-            i_supp = Int.( round.( (xu_r[ind_supp_x] .+ offx) / del ) )
+            colptr[tally+j+1] = colptr[tally+j] + length(velx_ind)
+            rowval = [rowval; velx_ind[:]]
+            nzval = [nzval; del_h[:]]
 
-            # Get index of these points for IB:
-            i_supp_xbx = Int.( round.( ind_supp_x .* repelem( 1:nb[i], length(xu) ) ) );
-            i_supp_xbx = i_supp_xbx[ i_supp_xbx .!= 0 ];
+            # E[tally+j, velx_ind[:]] .+= del_h[:];  # without direct CSC construction
+        end
 
-            # find y points within support
-            yu_r = repeat( yu, length(xb_y));
-            xb_ry = repelem( xb_y, length(yu) );
-            ind_supp_y = ( abs.( yu_r .- xb_ry ) .<= supp * del )
-
-            # Get y-index of these points for fluid grid
-            j_supp = Int.( round.( (yu_r[ind_supp_y] .+ offy) / del .+ 0.5  ) )
-
-            # Get index of these points for IB:
-            j_supp_xby = Int.( round.( ind_supp_y .* repelem( 1:nb[i], length(yu) ) ) )
-            j_supp_xby = j_supp_xby[ j_supp_xby .!= 0 ]
-
-            # For each IB point, add nonzero weights...
-            for j = 1:nb[i]
-
-                # x-indices on IB corresponding to current body point
-                ind_xbx = findall(i_supp_xbx .== j)
-
-                # x-indices on flow grid that are within support of IB point
-                ind_x = i_supp[ ind_xbx ];
-
-                # y-indices on IB corresponding to current body point
-                ind_xby = findall(j_supp_xby .== j);
-
-                # y-indices on flow grid that are within support of IB point
-                ind_y = j_supp[ ind_xby ];
-
-                # Combine flow indices
-                indvelx = repeat( ind_x, length(ind_y));
-                indvely = repelem( ind_y, length(ind_x) );
-
-                # rows of ET to add to
-                velx_ind = get_velx_ind( indvelx, indvely, grid );
-
-                # columns to add to
-                xb_ind = j .* ones(Int32, size(velx_ind ) );
-
-                # entries to put into columns
-                del_h = delta_h( xu[indvelx], xb_x[xb_ind], del) .*
-                    delta_h( yu[indvely], xb_y[xb_ind], del)
-
-
-                # Add to ET:
-                # y index starts after all the x-vels
-                ET .+= sparse( velx_ind, ncol_tally .+ xb_ind,
-                               del_h, nrows, ncols );
-            end
+        tally += nb[i];
 
         #--rows corresponding to y-vels
+        for j = 1:nb[i]
 
-            # x and y points on physical grid (for fluid domain)
-            xv = (del/2. : del : (m-1/2) * del ) .- offx;
-            yv = (del : del : (n-1)*del ) .- offy;
+            # Find x-points of fluid domain within support
+            ind_x =  findall( abs.( xv .- xb_x[j] ) .<= supp * del )
 
-            # x and y points on physical grid (for IB)
-            xb_x = xb[ 1 : nb[i] ];
-            xb_y = xb[ 1 + nb[i] : 2*nb[i] ];
+            # Find y-points within support
+            ind_y = findall( abs.( yv .- xb_y[j] ) .<= supp * del )
 
-            # find x points within support
-            xv_r = repeat( xv, length(xb_x));
-            xb_rx = repelem( xb_x, length(xv) );
-            ind_supp_x = ( abs.( xv_r .- xb_rx ) .<= supp * del )
+            # rows of ET to add to
+            vely_ind = n_add .+ m .* (ind_y' .- 1) .+ ind_x
 
-            # Get index of these points for fluid grid
-            i_supp = Int.( round.( (xv_r[ind_supp_x] .+ offx)/del .+ 0.5 ) )
+            # entries to put into columns
+            del_h = delta_h( xv[ind_x], xb_x[j], del) .*
+                    delta_h( yv[ind_y], xb_y[j], del)'
 
-            # Get index of these points for IB:
-            i_supp_xbx = Int.( round.( ind_supp_x .* repelem( 1:nb[i], length(xv) ) ) )
-            i_supp_xbx = i_supp_xbx[ i_supp_xbx .!= 0 ]
+            colptr[tally+j+1] = colptr[tally+j] + length(vely_ind)
+            rowval = [rowval; vely_ind[:]]
+            nzval = [nzval; del_h[:]]
 
-            # find y points within support
-            yv_r = repeat( yv, length(xb_y))
-            xb_ry = repelem( xb_y, length(yv) )
-            ind_supp_y = ( abs.( yv_r .- xb_ry ) .<= supp * del )
-
-            # Get y-index of these points for fluid grid
-            j_supp = Int.( round.( (yv_r[ind_supp_y] .+ offy) / del ) )
-
-            # Get index of these points for IB:
-            j_supp_xby = Int.( round.( ind_supp_y .* repelem( 1:nb[i], length(yv) ) ) )
-            j_supp_xby = j_supp_xby[ j_supp_xby .!= 0 ]
-
-            #println(sum(j_supp))
-            # For each IB point, add nonzero weights...
-            for j = 1:nb[i]
-
-                # x-indices on IB corresponding to current body point
-                ind_xbx = findall(i_supp_xbx .== j);
-
-                # x-indices on flow grid that are within support of IB point
-                ind_x = i_supp[ ind_xbx ];
-
-                # y-indices on IB corresponding to current body point
-                ind_xby = findall(j_supp_xby .== j);
-
-                # y-indices on flow grid that are within support of IB point
-                ind_y = j_supp[ ind_xby ];
-
-                # Combine flow indices
-                indvelx = repeat( ind_x, length(ind_y) );
-                indvely = repelem( ind_y, length(ind_x) );
-
-                # rows of ET to add to
-                vely_ind = get_vely_ind( indvelx, indvely, grid );
-
-                # columns to add to
-                xb_ind = j .* ones(Int32, size(vely_ind ) );
-
-                # entries to put into columns
-                del_h = delta_h( xv[indvelx], xb_x[xb_ind], del) .*
-                    delta_h( yv[indvely], xb_y[xb_ind], del)
-
-                # Add to ET:
-                # y index starts after all the x-vels
-                n_add = get_velx_ind( m-1, n, grid )
-                ET .+= sparse( n_add .+ vely_ind, xb_ind .+ ncol_tally .+ nb[i],
-                    del_h, nrows, ncols );
-            end
-
+            # E[tally+j, vely_ind[:]] .+= del_h[:];  # without direct CSC construction
+        end
 
         #Keep a tally of columns we've used to now
-        ncol_tally = ncol_tally + length(xb);
-
+        tally += nb[i];
     end
-    return ET
-end
 
-"""
-Compute the action of the matrix, B, that is used to solve for the surface
-stresses that lead to a velocity that satisfies the no-slip BCs
-"""
-function b_times!(x::Array{Float64, 2},
-                  z::Array{Float64, 2},
-                  Ainv::LinearMap,
-                  model::IBModel{UniformGrid, RigidBody{Static}},
-                  Γ::Array{Float64, 2},
-                  ψ::Array{Float64, 2},
-                  q::Array{Float64, 2})
-    """
-    %Performs one matrix multiply of B*z, where B is the matrix used to solve
-    %for the surface stresses that enforce the no-slip boundary condition.
-
-    % (B arises from an LU factorization of the full system)
-
-    Note ψ is just a dummy work array for circ2_st_vflx
-    """
-    # -- get circulation from surface stress  circ = Ainv * R * E' * z
-    #     We don't include BCs for Ainv because ET*z is compact
-    #circ = Ainv( mats.R*(mats.ET*z), dt, model );
-    mul!(Γ, Ainv, model.mats.RET*z)
-
-    #-- get vel flux from circulation
-    #vflx, _ = circ2_st_vflx( circ, model );
-    circ2_st_vflx!( ψ, q, Γ, model );
-
-    #--Interpolate onto the body and scale by h
-    #x = (model.mats.E*vflx) / model.grid.h;
-    mul!(x, model.mats.E, q)
-    rmul!(x, 1/model.grid.h)
-end
-
-
-
-# 44.733 ms (321 allocations: 48.80 MiB) for one evaluation
-function b_times!(x::Array{Float64, 2},
-                  z::Array{Float64, 2},
-                  Ainv::LinearMap,
-                  model::IBModel{MultiGrid, RigidBody{Static}},
-                  Γ::Array{Float64, 2},
-                  ψ::Array{Float64, 2},
-                  q::Array{Float64, 2})
-    """
-    %Performs one matrix multiply of B*z, where B is the matrix used to solve
-    %for the surface stresses that enforce the no-slip boundary condition.
-
-    % (B arises from an LU factorization of the full system)
-
-    Note ψ is just a dummy variable for computing velocity flux
-        Also this only uses Ainv on the first level
-    """
-
-    # --Initialize
-    grid = model.grid
-    mats = model.mats
-    m = grid.nx;
-    n = grid.ny;
-    nΓ = grid.nΓ   # Number of circulation points
-    mg = grid.mg
-
-    # -- get circulation from surface stress
-
-    # Get circ on 1st grid level
-    # TODO: in place with @view macro
-    Γ[:, 1] = Array( Ainv * (mats.RET*z) );
-    # We don't include BCs from coarse grid for Ainv because ET*z is compact
-
-    # Coarsify circulation to second grid level to get BCs for stfn
-    #Γ[:, 2] = coarsify( Γ[:,1], Γ[:,2], grid );
-    @views coarsify!( Γ[:,1], Γ[:,2], grid );
-
-    #-- get vel flux from circulation
-
-    # only need to work with 2 grid levels here
-    #vflx, _ = circ2_st_vflx( circ, 2, model);
-    circ2_st_vflx!( ψ, q, Γ, model, 2 );
-
-    #--Interpolate onto the body and scale by h
-    mul!(x, mats.E, q[:, 1])
-    rmul!(x, 1/grid.h)
-
+    return SparseMatrixCSC(nrows, ncols, colptr, rowval[:], nzval[:])'
 end
