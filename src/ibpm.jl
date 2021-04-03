@@ -17,37 +17,49 @@ include("interface-coupling/interface-coupling-include.jl")
 include("plotting/plotting-include.jl")
 include("timestepping/timestepping-include.jl")
 
-function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
-    Uinf=1.0, α=0.0, T=20.0*dt, plot=false)
+function IBPM_advance(Re, boundary, freestream=(Ux=1.0,);
+    Δx=missing, mg=5,body, Δt=missing, T=20.0*dt, plot=false)
 
-    # MultiGrid
-    grid = make_grid(nx, ny, offx, offy, len, mg=mg)
+    #--extract user params to sim variables
+        Δx, Δt, T, freestream = read_user_vars(Δt, Δx, freestream, Re, T)
+    #--
 
-    #Make body
-    r = body.lengthscale
+    #--Build flow grid
+        # MultiGrid
+        grid =  make_grid(Δx, boundary, mg=mg)
+    #--
 
-    if body.motion == "static"
-        motion=Static()
-    elseif body.motion == "rot_cyl"
-        motion=RotatingCyl(body.θ̇)
-    end
-    cyls = [make_cylinder( r, grid.h, 0.0, 0.0, motion )]
+    #--Build body
+        r = body.lengthscale
 
-    prob = init_prob(grid, cyls, Re, Δt);
-    state = init_state(prob);
+        if body.motion == "static"
+            motion=Static()
+        elseif body.motion == "rot_cyl"
+            motion=RotatingCyl(body.θ̇)
+        end
+        cyls = [make_cylinder( r, grid.h, 0.0, 0.0, motion )]
+    #--
 
-    base_flux!(state, grid, Uinf, α)  # Initialize irrotational base flux
+    #--Initialize problem and state definitions
+        prob = init_prob(grid, cyls, Re, Δt, freestream)
+        state = init_state(prob)
+    #--
 
-    timesteps = round(Int, T/Δt)
+    #--Timestepping
+        timesteps = round(Int, T/Δt)
 
-    run_sim(1, state, prob) #pre-compute stationary IB matrix before advancing
-    runtime = @elapsed run_sim(timesteps, state, prob) #advance to final time
+        run_sim(1, state, prob) #pre-compute IB matrix before advancing
+        runtime = @elapsed run_sim(timesteps, state, prob) #march to final time
+    #--
 
-    #plotting
-    if plot==true
-        plot_state(state, prob.model.grid)
-        plot_body(prob.model.bodies[1])
-    end
+    #--plotting
+        if plot==true
+            plot_state(state, prob.model.grid)
+            for j = 1:length(prob.model.bodies)
+                plot_body(prob.model.bodies[1])
+            end
+        end
+    #--
 
     return runtime
 end

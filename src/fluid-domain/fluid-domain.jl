@@ -1,5 +1,15 @@
 
-function make_grid(nx::Int, ny::Int, offx::Float64, offy::Float64, len::Float64; mg=1::Int)
+function make_grid(h::Float64, boundary::NTuple{4,Float64}; mg=1::Int)
+
+    #back out variables that the software needs from user defined vars
+    offx = -boundary[1]
+    offy = -boundary[3]
+    len = boundary[2]-boundary[1]
+    ylen = boundary[4]-boundary[3]
+
+    nx = Int64(round(len/h))
+    ny = Int64(round(ylen*nx/len))
+
     nΓ  = (nx-1)*(ny-1)  # Number of circulation points
 
     # num of (flux) points

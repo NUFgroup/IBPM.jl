@@ -51,9 +51,10 @@ A, Ainv, B, and Binv matrices
 function init_prob(grid::T where T <: Grid,
                    bodies::Array{V, 1} where V <: Body,
                    Re::Float64,
-                   dt::Float64)
+                   dt::Float64,
+                   freestream::NamedTuple)
     mats = get_mats(grid, bodies, Re)
-    model = IBModel(grid, bodies, Re, mats)
+    model = IBModel(grid, bodies, Re, mats, freestream)
     scheme = AB2(dt)   # Explicit time-stepping for nonlinear terms
     A, Ainv, Binv = get_AB(model, dt)
     work = init_memory(grid)

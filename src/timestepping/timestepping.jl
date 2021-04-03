@@ -4,6 +4,9 @@ function advance!(t::Float64,
                   prob::IBProblem)
     grid = prob.model.grid
 
+    # get irrotational flow contribution
+    base_flux!(t, state, grid, prob.model.freestream)
+
     if MotionType(prob.model.bodies) != Static
         update_coupling!(prob.model, t)
         prob.Binv = get_B(prob.model, prob.Ainv)
@@ -46,6 +49,9 @@ function advance!(t::Float64,
     """
     grid = prob.model.grid
 
+    # get irrotational flow contribution
+    base_flux!(t, state, grid, prob.model.freestream)
+
     if MotionType(prob.model.bodies) != Static
         update_coupling!(prob.model, t)
         prob.Binv = get_B(prob.model, prob.Ainv)
@@ -69,52 +75,59 @@ function advance!(t::Float64,
     # --update circulation , vel-flux, and strmfcn on fine grid
     #   to satisfy no-slip updates state.Γ, state.ψ, state.q
     project_circ!(Γs, state, prob)
-    circ2_st_vflx!( state.ψ, state.q, state.Γ, prob.model, grid.mg);
+    circ2_st_vflx!( state.ψ, state.q, state.Γ, prob.model, grid.mg)
 
     # --Update circulation on all grids based on fine-grid correction
     for lev = 2:grid.mg
-        @views coarsify!( state.Γ[:, lev-1], state.Γ[:, lev], grid);
+        @views coarsify!( state.Γ[:, lev-1], state.Γ[:, lev], grid)
     end
 
     #--A few simulation quantities of interest
     # get CFL (u * dt / dx) :
     dt = prob.scheme.dt
-    state.cfl = maximum( abs.( (1/(grid.h^2)) * @view(state.q[:, 1]) * dt ) ) ;
+    state.cfl = maximum( abs.( (1/(grid.h^2)) * @view(state.q[:, 1]) * dt ) )
 end
 
 
 
 #Back out background (freestream) flux q0 that is irrotational
-function base_flux!(state::IBState{UniformGrid},
+function base_flux!(t::Float64,
+                    state::IBState{UniformGrid},
                     grid::UniformGrid,
-                    Uinf::Float64,
-                    α::Float64)
+                    freestream::NamedTuple)
         """
         Initialize irrotational freestream flux
         """
     m = grid.nx;
     n = grid.ny;
-    state.q0[ 1:(m-1)*n ] .= Uinf * grid.h * cos(α);  # x-flux
-    state.q0[ (m-1)*n+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
+    Ux = freestream.Ux(t)
+    Uy = freestream.Uy(t)
+    α = freestream.inclination(t)
+    state.q0[ 1:(m-1)*n ] .= (Ux*cos(α) - Uy*sin(α))* grid.h  # x-flux
+    state.q0[ (m-1)*n+1:end ] .= (Ux*sin(α) + Uy*cos(α))* grid.h  # y-flux
 end
 
 
-function base_flux!(state::IBState{MultiGrid},
+function base_flux!(t::Float64,
+                    state::IBState{MultiGrid},
                     grid::MultiGrid,
-                    Uinf::Float64,
-                    α::Float64)
+                    freestream::NamedTuple)
         """
         Initialize irrotational freestream flux
         """
     m = grid.nx;
     n = grid.ny;
+    Ux = freestream.Ux(t)
+    Uy = freestream.Uy(t)
+
+    α = freestream.inclination(t)
     for lev = 1 : grid.mg
         # Coarse grid spacing
         hc = grid.h * 2^( lev - 1 );
 
         # write fluid velocity flux in body-fixed frame
-        state.q0[ 1:(m-1)*n, lev ] .= Uinf * hc * cos(α);      # x-flux
-        state.q0[ (m-1)*n+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
+        state.q0[ 1:(m-1)*n, lev ] .= (Ux*cos(α) - Uy*sin(α))* hc    # x-flux
+        state.q0[ (m-1)*n+1:end, lev ] .= (Ux*sin(α) + Uy*cos(α))*hc # y-flux
     end
 end
 

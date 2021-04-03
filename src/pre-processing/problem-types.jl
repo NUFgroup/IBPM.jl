@@ -134,6 +134,7 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
     bodies::Array{V, 1}         # Array of bodies
     Re::Float64                 # Reynolds number
     mats::IBMatrices            # Various precomputed sparse matrices
+    freestream::NamedTuple
 end
 
 """
