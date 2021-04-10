@@ -4,9 +4,11 @@ function advance!(t::Float64,
                   prob::IBProblem)
     grid = prob.model.grid
 
-    if MotionType(prob.model.bodies) != Static
-        update_coupling!(prob.model, t)
-        prob.Binv = get_B(prob.model, prob.Ainv)
+    # Move bodies and update coupling matrices (E)
+    update_bodies!(prob, t)
+
+    if MotionType(prob.model.bodies) == BodyFixed
+        base_flux!(state, grid, prob.model.bodies[1].motion, t)
     end
 
     # Alias working memory for notational clarity
@@ -45,10 +47,10 @@ function advance!(t::Float64,
         40.325 ms (719 allocations: 15.66 MiB)
     """
     grid = prob.model.grid
-
-    if MotionType(prob.model.bodies) != Static
-        update_coupling!(prob.model, t)
-        prob.Binv = get_B(prob.model, prob.Ainv)
+    update_bodies!(prob, t)
+    
+    if MotionType(prob.model.bodies) == BodyFixed
+        base_flux!(state, grid, prob.model.bodies[1].motion, t)
     end
 
     # Alias working memory for notational clarity
@@ -64,7 +66,6 @@ function advance!(t::Float64,
     # that doesn't satisfy no slip
     @views boundary_forces!(state.F̃b, qs[:, 1], state.q0[:, 1], prob)
     update_stress!(state, prob) #Compute integral quantities and store in state
-
 
     # --update circulation , vel-flux, and strmfcn on fine grid
     #   to satisfy no-slip updates state.Γ, state.ψ, state.q
@@ -82,30 +83,26 @@ function advance!(t::Float64,
     state.cfl = maximum( abs.( (1/(grid.h^2)) * @view(state.q[:, 1]) * dt ) ) ;
 end
 
-
-
-#Back out background (freestream) flux q0 that is irrotational
 function base_flux!(state::IBState{UniformGrid},
                     grid::UniformGrid,
-                    Uinf::Float64,
-                    α::Float64)
-        """
-        Initialize irrotational freestream flux
-        """
+                    motion::InertialMotion)
+    """
+    Initialize irrotational freestream flux
+    """
+    Uinf, α = motion.Uinf, motion.α
     m = grid.nx;
     n = grid.ny;
     state.q0[ 1:(m-1)*n ] .= Uinf * grid.h * cos(α);  # x-flux
     state.q0[ (m-1)*n+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
 end
 
-
 function base_flux!(state::IBState{MultiGrid},
                     grid::MultiGrid,
-                    Uinf::Float64,
-                    α::Float64)
-        """
-        Initialize irrotational freestream flux
-        """
+                    motion::InertialMotion)
+    """
+    Initialize irrotational freestream flux
+    """
+    Uinf, α = motion.Uinf, motion.α
     m = grid.nx;
     n = grid.ny;
     for lev = 1 : grid.mg
@@ -116,6 +113,51 @@ function base_flux!(state::IBState{MultiGrid},
         state.q0[ 1:(m-1)*n, lev ] .= Uinf * hc * cos(α);      # x-flux
         state.q0[ (m-1)*n+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
     end
+end
+
+
+
+
+function base_flux!(state::IBState{MultiGrid},
+                    grid::MultiGrid,
+                    motion::BodyFixed,
+                    t::Float64)
+    """
+    Need to account for rotations about offset from origin
+
+    ALSO BE CAREFUL ABOUT SIGNS... CHANGE TO MATCH HSIEH-CHEN'S NOTATION
+    """
+    U = motion.U(t)  # [uinf, vinf]
+    Ω = motion.Ω(t)  # Rotational component
+    m = grid.nx;
+    n = grid.ny;
+
+    # TODO: Should be able to edit base flux directly
+    #q0p = zeros(grid.nq)  # Potential flow
+    #q0r = zeros(grid.nq)  # Rotational flow
+    for lev = 1 : grid.mg
+        # Coarse grid spacing
+        hc = grid.h * 2^( lev - 1 );
+
+        # Potential flow part
+        state.q0[1:(m-1)*n, lev] .= hc*U[1]          # x-velocity
+        state.q0[(m-1)*n+1:grid.nq, lev] .= hc*U[2]  # y-velocity
+
+        # write fluid velocity flux in body-fixed frame
+        #state.q0[ 1:(m-1)*n, lev ] .= Uinf * hc * cos(α);      # x-flux
+        #state.q0[ (m-1)*n+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
+
+        # Rotational part
+        # COPIED FROM FORTRAN... CHECK THIS
+        #x(i, lev) = (i-1-m/2)*hc + (m/2)*grid.h - grid.offx
+        #y(j, lev) = (j-0.5-n/2)*hc + (n/2)*grid.h - grid.offy
+        #state.q0[:, lev] .= hc*( q0p .+ q0r )
+    end
+
+
+    # Copied from Fortran code
+    x(i, lev) = (i-1-m/2)*h*2^(lev-1) + (m/2)*h - offx
+    y(j, lev) = (j-0.5-n/2)*h*2^(lev-1) + (n/2)*h - offy
 end
 
 
@@ -263,9 +305,7 @@ function boundary_forces!(::Type{Static},
     F̃b .= (1/h)*prob.Binv*F̃b                         # Allocates a small amount of memory
 end
 
-
-
-function boundary_forces!(::Type{RotatingCyl},
+function boundary_forces!(::Union{Type{RotatingCyl}, Type{BodyFixed}},
                           F̃b::AbstractVector,
                           qs::AbstractVector,
                           q0::AbstractVector,
@@ -391,12 +431,26 @@ For other Motions
 function dynamic_fn(model::IBModel)
 """
 
-function update_coupling!(model::IBModel, t::Float64)
-    bodies, grid = model.bodies, model.grid
-    for j=1:length(bodies)
-        move_body!(bodies[j], t)
+#TODO: break out by multiple dispatch... but don't duplicate code
+function update_bodies!(prob::IBProblem, t::Float64)
+    model = prob.model
+    bodies, grid = prob.model.bodies, prob.model.grid
+    motion = MotionType(bodies)
+
+    if motion == BodyFixed
+
     end
 
-    model.mats.E = coupling_mat( grid, bodies )
-    model.mats.RET = (model.mats.E*model.mats.C)'
+    if motion != Static
+        for j=1:length(bodies)
+            move_body!(bodies[j], t)
+        end
+    end
+
+    # For arbitrary motion in an inertial frame, have to update operators
+    if motion == MotionFunction
+        model.mats.E = coupling_mat( grid, bodies )
+        model.mats.RET = (model.mats.E*model.mats.C)'
+        prob.Binv = get_B(model, prob.Ainv)
+    end
 end

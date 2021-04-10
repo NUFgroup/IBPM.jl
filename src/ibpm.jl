@@ -19,7 +19,6 @@ include("timestepping/timestepping-include.jl")
 
 function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     Uinf=1.0, α=0.0, T=20.0*dt, plot=false)
-
     # MultiGrid
     grid = make_grid(nx, ny, offx, offy, len, mg=mg)
 
@@ -36,7 +35,10 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     prob = init_prob(grid, cyls, Re, Δt);
     state = init_state(prob);
 
-    base_flux!(state, grid, Uinf, α)  # Initialize irrotational base flux
+    println(prob.model.bodies)
+
+    Uinf = []
+    base_flux!(state, grid, motion)  # Initialize irrotational base flux
 
     timesteps = round(Int, T/Δt)
 
@@ -59,6 +61,7 @@ function run_sim(it_stop, state, prob)
         advance!(t, state, prob)
         if mod(it,20) == 0
             @show (it, state.CD, state.CL, state.cfl)
+            @show (prob.model.bodies[1].motion.U(t))
         end
     end
 end

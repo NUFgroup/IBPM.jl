@@ -18,6 +18,8 @@ function meshgrid(xin::Union{Array{Number, 1}, UnitRange{Int64}},
     """
     duplicate of matlab meshgrid function
     Should be able to get rid of this with broadcasting
+
+    IS THIS USED ANYWHERE??
     """
     nx=length(xin)
     ny=length(yin)

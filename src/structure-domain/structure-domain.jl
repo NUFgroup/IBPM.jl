@@ -28,10 +28,8 @@ end
 
 function MotionType( bodies::Array{V, 1} where V<:Body )
     motions = [typeof(bodies[i].motion) for i=1:length(bodies)]
-    if all(motions .== Static)
-        return Static
-    elseif all(motions .== RotatingCyl)
-        return RotatingCyl
+    if all(motions .== motions[1])
+        return motions[1]
     else
         return Motion
     end
@@ -59,7 +57,6 @@ function move_body!(body::RigidBody, t::Float64)
     move_body!(MotionType(body), body, t)
 end
 
-
 function move_body!(
     ::Type{RotatingCyl},
     body::RigidBody,
@@ -68,8 +65,8 @@ function move_body!(
     """
     Compute linear speed of points on rotating cylinder
     θ = atan(y/x)
-    ẋ = -R*θ̇*sin(θ)
-    ẏ =  R*θ̇*cos(θ)
+    ẋ = -R*Ω*sin(θ)
+    ẏ =  R*Ω*cos(θ)
     Note: this is a specialized case for development only
     """
     xb = body.xb
@@ -77,11 +74,10 @@ function move_body!(
     motion = body.motion
     R = sqrt(xb[1, 1]^2 + xb[1, 2]^2)
     θ = atan.(xb[:, 2], xb[:, 1])
-    ub[:, 1] .= -R*motion.θ̇*sin.(θ)
-    ub[:, 2] .=  R*motion.θ̇*cos.(θ)
+    ub[:, 1] .= -R*motion.Ω*sin.(θ)
+    ub[:, 2] .=  R*motion.Ω*cos.(θ)
     return ub
 end
-
 
 function move_body!(
     ::Type{MotionFunction},
@@ -89,14 +85,21 @@ function move_body!(
     t::Float64
     )
     se2 = get_transformation(body.motion, t)
-    #println(ub[1, 1])
-    #println(se2.Ru[1, :] * ub[1, :])
     for i=1:size(body.xb, 1)
         @views body.xb[i, :] .= se2.pos .+ se2.Rx*body.x0[i, :]
         @views body.ub[i, :] .= se2.vel .+ se2.Ru*body.x0[i, :]
     end
-    #println(se2.Ru)
-    #return ub
-    #xb .= se2.pos .+ se2.Rx*xb
-    #ub .= se2.vel .+ se2.Ru*ub
+end
+
+
+# TODO: Update to use TangentSE2
+function move_body!(
+    ::Type{BodyFixed},
+    body::RigidBody,
+    t::Float64
+    )
+    for i=1:size(body.xb, 1)
+        # WHAT IS THIS SUPPOSED TO BE??
+        @views body.ub[i, :] .= 0.0*body.motion.U(t)
+    end
 end

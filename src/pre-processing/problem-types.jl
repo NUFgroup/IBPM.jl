@@ -39,12 +39,19 @@ Types of motion a body can undergo
 """
 abstract type Motion end
 
+abstract type InertialMotion <: Motion end
+
 # Fixed bodies - no motion
-struct Static <: Motion end
+struct Static <: InertialMotion
+    Uinf::Float64       # Free-stream velocity
+    α::Float64          # Angle of attack
+end
 
 # Rotating cylinder-specific type
-struct RotatingCyl <: Motion
-    θ̇::Float64        # Angular velocity
+struct RotatingCyl <: InertialMotion
+    Uinf::Float64            # Free-stream velocity
+    α::Float64               # Angle of attack
+    Ω::Float64               # Angular velocity (constant)
 end
 
 """
@@ -62,9 +69,26 @@ struct TangentSE2
     Ru::Any  # maps velocities [ẋ, ẏ]
 end
 
-mutable struct MotionFunction <: Motion
+mutable struct MotionFunction <: InertialMotion
+    Uinf::Float64            # Free-stream velocity
+    α::Float64               # Angle of attack
     xc::Any                  # Center position [x, y, θ] = xc(t)
     uc::Any                  # Center velocity [ẋ, ẏ, θ̇] = uc(t)
+end
+
+"""
+Body-fixed (non-inertial) reference frame
+
+Express arbitrary motion as a combination of translation and a rotation
+ => becomes a superposition of time-varying potential flow and
+    solid-body rotation in base flux (no additional nonlinear terms needed)
+See Hsieh-Chen Tsai thesis (2016) for derivation
+
+Specify the linear and angular velocities relative to the lab frame
+"""
+mutable struct BodyFixed <: Motion
+    U::Any            # Free-stream velocity U(t)
+    Ω::Any            # Angular velocity Ω(t)
 end
 
 """

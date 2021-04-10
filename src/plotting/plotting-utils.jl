@@ -13,11 +13,12 @@ function plot_state(state::IBState, grid::T) where T <:Grid
     display(contourf(x,y, ω', c=cgrad(:seaborn_icefire_gradient),
         size=(4*grid.nx, 4*grid.ny),#c=cgrad(:temperaturemap), #c=cgrad(:diverging_gkr_60_10_c40_n256),#c=cgrad(:blackbody),#c=cgrad(:temperaturemap),#,#
         colorbar=:false, lw=0, levels=30, aspect_ratio=:equal,
-        framestyle=:box))
+        framestyle=:box,
+        clim=(-5, 5)))
 
 end
 
 function plot_body(body)
     display(plot!(body.xb[:, 1], body.xb[:, 2], lw=0, fillrange=0.0,
-        fillcolor=:white, legend=false))
+        fillcolor=:gray, legend=false))
 end
