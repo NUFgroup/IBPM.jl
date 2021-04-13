@@ -79,3 +79,12 @@ end
 F = zeros(length(t), 2)
 anim =  run_sim(t, F, state, prob) #advance to final time
 gif(anim, "eldredge.gif", fps = 30)
+
+
+# NOTE: Possible difference in force calculation between C++ and Fortran
+"""
+# Rescaling:
+CL = @. F[:, 1]*sin(θ(t)) + F[:, 2]*cos(θ(t))
+h, ds = grid.h, prob.model.bodes[1].ds[1]
+plot(t, CL*(ds/(2*h)), xlims=(5, 12))
+"""
