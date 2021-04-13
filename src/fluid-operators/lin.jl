@@ -224,7 +224,7 @@ function get_A(model::IBModel{MultiGrid, <:Body}, dt::Float64)
     return A, Ainv
 end
 
-function get_B(model::IBModel{UniformGrid, RigidBody{Static}}, Ainv::LinearMap)
+function get_B(model::IBModel{UniformGrid, RigidBody{T}} where T <: Motion, Ainv::LinearMap)
     """
     Precompute 'B' matrix by evaluating mat-vec products for unit vectors
 
@@ -258,7 +258,7 @@ function get_B(model::IBModel{UniformGrid, RigidBody{Static}}, Ainv::LinearMap)
     return Binv
 end
 
-function get_B(model::IBModel{MultiGrid, RigidBody{Static}}, Ainv)
+function get_B(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion, Ainv)
     """
     MultiGrid version:
     Precompute 'B' matrix by evaluating mat-vec products for unit vectors
@@ -295,7 +295,7 @@ function get_B(model::IBModel{MultiGrid, RigidBody{Static}}, Ainv)
 end
 
 
-function get_B(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion, Ainv)
+function get_B(model::IBModel{MultiGrid, RigidBody{MotionFunction}}, Ainv)
     """
     For more general motions
         Create a linear map with mat-vec product and solve system with

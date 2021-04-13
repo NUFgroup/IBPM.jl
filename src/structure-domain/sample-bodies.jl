@@ -2,8 +2,28 @@
 Support for constructing basic bodies
 """
 
+function make_plate(L, α, h, x0, y0, motion; n=0)
+    # build plate of length L at AoA α, using flow grid spacing of h
+    # (structure will have a spacing of 2h)
 
-# Example body constructor
+    # Get # of points such that ds = 2h
+    if (n==0)
+        n = Int( floor( L / h / 2 ) );
+    end
+
+    spt = L.*(0:(n-1))/n;  # Range (0, L)
+    xhat = spt*cos.(-α);
+    yhat = spt*sin.(-α);
+
+    xb = [xhat.+x0  yhat.+y0];
+
+    # sanity check: make sure ds is equal to 2 * h
+    ds = sqrt( (xhat[2] - xhat[1])^2 + (yhat[2] - yhat[1])^2 ) ;
+
+    return RigidBody(motion, xb, copy(xb), 0.0*xb, fill(ds, n))
+
+end
+
 function make_cylinder(r, h, x0, y0, motion; n=0)
     # build cylinder of radius r using flow grid spacing of h
     # (cylinder will have a spacing of 2h)
@@ -20,19 +40,13 @@ function make_cylinder(r, h, x0, y0, motion; n=0)
     xhat = r.*cos.(spt);
     yhat = r.*sin.(spt);
 
-    xb = [xhat.+x0  yhat.+y0];
+    xb = [xhat.-x0  yhat.-y0];
 
     # sanity check: make sure ds is equal to 2 * h
     ds = sqrt( (xhat[2] - xhat[1])^2 + (yhat[2] - yhat[1])^2 ) ;
 
     return RigidBody(motion, xb, copy(xb), 0.0*xb, fill(ds, n))
 end
-
-
-
-
-#Why is this here?
-
 
 function make_naca(x0, N, spec, motion)
 
@@ -69,8 +83,6 @@ function naca(x, spec)
     m = parse(Int, spec[1])/100.    # Maximum camber
     p = parse(Int, spec[2])/10.     # Location of max. camber
     t = parse(Int, spec[3:4])/100.  # Maximum thickness
-
-
 
     yc = zeros(size(x));
     if (m > 0) && (p > 0)  # Cambered airfoil

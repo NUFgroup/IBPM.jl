@@ -92,14 +92,11 @@ function move_body!(
 end
 
 
-# TODO: Update to use TangentSE2
+# TODO: DO WE NEED THIS?? SEEMS LIKE MAYBE NOT...
 function move_body!(
     ::Type{BodyFixed},
     body::RigidBody,
     t::Float64
     )
-    for i=1:size(body.xb, 1)
-        # WHAT IS THIS SUPPOSED TO BE??
-        @views body.ub[i, :] .= 0.0*body.motion.U(t)
-    end
+    body.ub .*= 0.0
 end

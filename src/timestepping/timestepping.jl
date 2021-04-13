@@ -8,7 +8,7 @@ function advance!(t::Float64,
     update_bodies!(prob, t)
 
     if MotionType(prob.model.bodies) == BodyFixed
-        base_flux!(state, grid, prob.model.bodies[1].motion, t)
+        base_flux!(state, prob, t)
     end
 
     # Alias working memory for notational clarity
@@ -48,9 +48,9 @@ function advance!(t::Float64,
     """
     grid = prob.model.grid
     update_bodies!(prob, t)
-    
+
     if MotionType(prob.model.bodies) == BodyFixed
-        base_flux!(state, grid, prob.model.bodies[1].motion, t)
+        base_flux!(state, prob, t)
     end
 
     # Alias working memory for notational clarity
@@ -117,49 +117,138 @@ end
 
 
 
+function base_flux_OLD!(state::IBState{UniformGrid},
+                    prob::IBProblem,
+                    t::Float64)
+    grid = prob.model.grid
+    motion = prob.model.bodies[1].motion
+    nu = grid.ny*(grid.nx-1);  # Number of x-flux points
+
+    # Alias working memory
+    ψ0 = prob.work.Γ1;
+    Γ0 = prob.work.Γ2;
+
+    ### Rotational part
+    # Get flux from curl of solid-body rotation
+    #  Note factor of 2 from angular velocity -> vorticity
+    Γ0 .= 2*grid.h^2*motion.θ̇(t)
+    circ2_st_vflx!(ψ0, state.q0, Γ0, prob.model)
+
+    ### Potential flow part
+    Ux0 =  motion.U(t)*cos(motion.θ(t))
+    Uy0 = -motion.U(t)*sin(motion.θ(t))
+    state.q0[1:nu, 1] .+= grid.h*Ux0          # x-flux
+    state.q0[nu+1:grid.nq, 1] .+= grid.h*Uy0  # y-velocity
+end
+
+
+function base_flux!(state::IBState{UniformGrid},
+                    prob::IBProblem,
+                    t::Float64)
+    grid = prob.model.grid
+    motion = prob.model.bodies[1].motion
+    nu = grid.ny*(grid.nx-1);  # Number of x-flux points
+
+    ### Rotational part
+    Ω = -motion.θ̇(t)
+    α = -motion.θ(t)
+    nx, ny, h = grid.nx, grid.ny, grid.h;
+
+    ### x-flux
+    # TODO: CHECK OFFSETS FOR THESE
+    y = h*(1:ny) .- grid.offy
+    YY = ones(nx-1)*y'
+    state.q0[1:nu, 1] .= -h*Ω*YY[:]
+
+    ### y-flux
+    x = h*(1:nx) .- grid.offx
+    XX = x*ones(ny-1)'
+    state.q0[nu+1:grid.nq, 1] .= h*Ω*XX[:]
+
+    ### Potential flow part
+    Ux0 = motion.U(t)*cos(α)
+    Uy0 = motion.U(t)*sin(α)
+    state.q0[1:nu, 1] .+= h*Ux0          # x-flux
+    state.q0[nu+1:grid.nq, 1] .+= h*Uy0  # y-velocity
+end
 
 function base_flux!(state::IBState{MultiGrid},
-                    grid::MultiGrid,
-                    motion::BodyFixed,
+                    prob::IBProblem,
                     t::Float64)
-    """
-    Need to account for rotations about offset from origin
+    grid = prob.model.grid
+    motion = prob.model.bodies[1].motion
+    nx, ny, h = grid.nx, grid.ny, grid.h;
+    nu = ny*(nx-1);  # Number of x-flux points
 
-    ALSO BE CAREFUL ABOUT SIGNS... CHANGE TO MATCH HSIEH-CHEN'S NOTATION
-    """
-    U = motion.U(t)  # [uinf, vinf]
-    Ω = motion.Ω(t)  # Rotational component
-    m = grid.nx;
-    n = grid.ny;
+    ### Rotational part
+    Ω = -motion.θ̇(t)
+    α = -motion.θ(t)
 
-    # TODO: Should be able to edit base flux directly
-    #q0p = zeros(grid.nq)  # Potential flow
-    #q0r = zeros(grid.nq)  # Rotational flow
+    state.q0 .*= 0.0
+    for lev=1:grid.mg
+        hc = h*2^(lev-1);  # Coarse grid spacing
+
+        ### x-flux
+        y = @. ((1:ny)-0.5-ny/2)*hc + ny/2*h - grid.offy
+        YY = ones(nx-1)*y'
+        state.q0[1:nu, lev] .= -hc*Ω*YY[:]
+
+        ### y-flux
+        x = @. ((1:nx)-0.5-nx/2)*hc + nx/2*h - grid.offx
+        XX = x*ones(ny-1)'
+        state.q0[nu+1:end, lev] .= hc*Ω*XX[:]
+    end
+
+    ### Potential flow part (note θ = -α for angle of attack)
+    Ux0 = motion.U(t)*cos(α)
+    Uy0 = motion.U(t)*sin(α)
+    for lev=1:grid.mg
+        # Coarse grid spacing
+        hc = h*2^(lev-1 );
+
+        state.q0[1:nu, lev] .+= hc*Ux0          # x-flux
+        state.q0[nu+1:end, lev] .+= hc*Uy0  # y-velocity
+    end
+end
+
+"""
+#TODO: DO THIS WITHOUT circ2_st_vflx (DIRECT CROSS PRODUCT)
+function base_flux!(state::IBState{MultiGrid},
+                    prob::IBProblem,
+                    t::Float64)
+    grid = prob.model.grid
+    motion = prob.model.bodies[1].motion
+    nu = grid.ny*(grid.nx-1);  # Number of x-flux points
+
+    # Alias working memory
+    ψ0 = prob.work.Γ1;
+    Γ0 = prob.work.Γ2;
+
+    ### Rotational part
+    # Get flux from curl of solid-body rotation
+    #  Note factor of 2 from angular velocity -> vorticity
+    Ω = -motion.θ̇(t)
+    α = -motion.θ(t)
+
+    for lev=1:grid.mg
+        hc = grid.h * 2^( lev - 1 );  # Coarse grid spacing
+        Γ0[:, lev] .= 2*hc^2*Ω
+    end
+
+    circ2_st_vflx!(ψ0, state.q0, Γ0, prob.model, grid.mg)
+
+    ### Potential flow part (note θ = -α for angle of attack)
+    Ux0 = motion.U(t)*cos(α)
+    Uy0 = motion.U(t)*sin(α)
     for lev = 1 : grid.mg
         # Coarse grid spacing
         hc = grid.h * 2^( lev - 1 );
 
-        # Potential flow part
-        state.q0[1:(m-1)*n, lev] .= hc*U[1]          # x-velocity
-        state.q0[(m-1)*n+1:grid.nq, lev] .= hc*U[2]  # y-velocity
-
-        # write fluid velocity flux in body-fixed frame
-        #state.q0[ 1:(m-1)*n, lev ] .= Uinf * hc * cos(α);      # x-flux
-        #state.q0[ (m-1)*n+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
-
-        # Rotational part
-        # COPIED FROM FORTRAN... CHECK THIS
-        #x(i, lev) = (i-1-m/2)*hc + (m/2)*grid.h - grid.offx
-        #y(j, lev) = (j-0.5-n/2)*hc + (n/2)*grid.h - grid.offy
-        #state.q0[:, lev] .= hc*( q0p .+ q0r )
+        ### Potential flow part
+        state.q0[1:nu, lev] .+= hc*Ux0          # x-flux
+        state.q0[nu+1:grid.nq, lev] .+= hc*Uy0  # y-velocity
     end
-
-
-    # Copied from Fortran code
-    x(i, lev) = (i-1-m/2)*h*2^(lev-1) + (m/2)*h - offx
-    y(j, lev) = (j-0.5-n/2)*h*2^(lev-1) + (n/2)*h - offy
-end
-
+end"""
 
 function get_trial_state!(qs::AbstractArray,
                         Γs::AbstractArray,
@@ -202,8 +291,6 @@ function get_trial_state!(qs::AbstractArray,
     # Trial velocity  (note ψ is used here as a dummy variable)
     circ2_st_vflx!( state.ψ, qs, Γs, prob.model );
 end
-
-
 
 function get_trial_state!(qs::AbstractArray,
                         Γs::AbstractArray,
@@ -285,7 +372,7 @@ function boundary_forces!(F̃b::AbstractVector,
     boundary_forces!( MotionType(prob.model.bodies), F̃b, qs, q0, prob)
 end
 
-function boundary_forces!(::Type{Static},
+function boundary_forces!(::Union{Type{Static}, Type{BodyFixed}},
                           F̃b::AbstractVector,
                           qs::AbstractVector,
                           q0::AbstractVector,
@@ -295,6 +382,8 @@ function boundary_forces!(::Type{Static},
         for uB = 0 and bc2 = 0
         Bf̃ = Eq
            = ECψ
+
+    Note for BodyFixed debugging: this only takes place on finest grid
     """
     E = prob.model.mats.E
     h = prob.model.grid.h
@@ -305,7 +394,7 @@ function boundary_forces!(::Type{Static},
     F̃b .= (1/h)*prob.Binv*F̃b                         # Allocates a small amount of memory
 end
 
-function boundary_forces!(::Union{Type{RotatingCyl}, Type{BodyFixed}},
+function boundary_forces!(::Type{RotatingCyl},
                           F̃b::AbstractVector,
                           qs::AbstractVector,
                           q0::AbstractVector,
@@ -328,7 +417,6 @@ function boundary_forces!(::Union{Type{RotatingCyl}, Type{BodyFixed}},
     mul!(F̃work, E, qwork)                  # E*(qs .+ state.q0)
     F̃work .-= get_ub(prob.model.bodies)*prob.model.grid.h   # Enforce no-slip conditions
     mul!(F̃b, prob.Binv, F̃work/h);
-    #F̃b .= (1/h)*prob.Binv*F̃b               # Allocates a small amount of memory
 end
 
 
@@ -421,25 +509,11 @@ function AB2(dt::Float64)
     return AdamsBashforth(dt, [1.5, -0.5])
 end
 
-
-
-
-"""
-For dispatching to Static motions
-function static_fn(model::IBModel{<:Grid, <:Body{Static}})
-For other Motions
-function dynamic_fn(model::IBModel)
-"""
-
 #TODO: break out by multiple dispatch... but don't duplicate code
 function update_bodies!(prob::IBProblem, t::Float64)
     model = prob.model
     bodies, grid = prob.model.bodies, prob.model.grid
     motion = MotionType(bodies)
-
-    if motion == BodyFixed
-
-    end
 
     if motion != Static
         for j=1:length(bodies)

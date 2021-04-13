@@ -1,6 +1,6 @@
 # Benchmarks
 
-These should be relatively static tests to make sure we get consistent results as we change the code
+These should be relatively static tests to make sure we get consistent results as we change the code with the same grid and time-stepping for all implementations
 
 ### Re=40 cylinder (steady)
 Compared against C++ and MATLAB implementations on benchmark case from Colonius & Taira (2008) with $n_b=78$ points on the cylinder with steady free-stream flow.
@@ -10,6 +10,7 @@ Script to run the validation case is `cyl40.jl`.
 | ----------- | ----------- | -----|
 | MATLAB      | 700       |  1.5738  |
 | C++   | 1164      | 1.5320  |
+| Fortran |  865  |  1.5738  |
 | Julia (single-core)  | 691   |  1.5738 |
 | Julia (4 threads)  |  488   |  1.5738  |
 
@@ -28,10 +29,12 @@ __NOTE__: The "Runtime" benchmarks are to T=10 with dt=1e-2, not to full converg
 
 | Package      | Script | Runtime (secs) |  $C_L$ |
 | ----------- | ----------- | ----------- | -----|
-| C++ (lab frame)  | N/A  | |   |
-| C++ (body-fixed)  | N/A | |   |
-| Julia (case 1)  | 'cyl_rot1.jl' |  57 | -0.211 |
+| C++ (lab frame)*  | N/A | 573   |  -0.139 |
+| C++ (body-fixed)  | N/A |  78 |   |
+| Julia (case 1)  | 'cyl_rot1.jl' |  57 | -0.200 |
 | Julia (case 2)  |  'cyl_rot2.jl'   |  82 |  -0.172  |
 | Julia (case 3)  |  'cyl_rot3.jl'   |  |  |
+
+*Did not converge to steady state
 
 __TO DO:__ FINISH THESE BENCHMARKS (and run in C++)

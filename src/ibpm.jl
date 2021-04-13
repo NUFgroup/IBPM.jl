@@ -61,7 +61,6 @@ function run_sim(it_stop, state, prob)
         advance!(t, state, prob)
         if mod(it,20) == 0
             @show (it, state.CD, state.CL, state.cfl)
-            @show (prob.model.bodies[1].motion.U(t))
         end
     end
 end
