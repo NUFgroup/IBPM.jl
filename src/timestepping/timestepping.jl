@@ -1,3 +1,6 @@
+
+using LinearAlgebra: norm  # FOR DEBUGGING
+
 #Driver function that steps forward in time
 function advance!(t::Float64,
                   state::IBState{UniformGrid},
@@ -24,7 +27,6 @@ function advance!(t::Float64,
     @views boundary_forces!(state.F̃b, qs[:, 1], state.q0[:, 1], prob)
     update_stress!(state, prob) #Compute integral quantities and store in state
 
-
     # --update circulation , vel-flux, and strmfcn on fine grid
     #   to satisfy no-slip updates state.Γ, state.ψ, state.q
     project_circ!(Γs, state, prob)
@@ -35,7 +37,6 @@ function advance!(t::Float64,
     dt = prob.scheme.dt
     state.cfl = maximum( abs.( (1/grid.h^2) * state.q * dt ) ) ;
 end
-
 
 function advance!(t::Float64,
                   state::IBState{MultiGrid},
@@ -69,13 +70,14 @@ function advance!(t::Float64,
 
     # --update circulation , vel-flux, and strmfcn on fine grid
     #   to satisfy no-slip updates state.Γ, state.ψ, state.q
-    project_circ!(Γs, state, prob)
-    circ2_st_vflx!( state.ψ, state.q, state.Γ, prob.model, grid.mg);
+    project_circ!(Γs, state, prob)    # OK TO HERE
 
     # --Update circulation on all grids based on fine-grid correction
     for lev = 2:grid.mg
         @views coarsify!( state.Γ[:, lev-1], state.Γ[:, lev], grid);
     end
+
+    circ2_st_vflx!( state.ψ, state.q, state.Γ, prob.model, grid.mg);
 
     #--A few simulation quantities of interest
     # get CFL (u * dt / dx) :
@@ -83,12 +85,22 @@ function advance!(t::Float64,
     state.cfl = maximum( abs.( (1/(grid.h^2)) * @view(state.q[:, 1]) * dt ) ) ;
 end
 
-function base_flux!(state::IBState{UniformGrid},
-                    grid::UniformGrid,
-                    motion::InertialMotion)
+function base_flux!(state::IBState,
+                    prob::IBProblem,
+                    t::Float64)
+    base_flux!(MotionType(prob.model.bodies), state, prob, t)
+end
+
+function base_flux!(::Type{T} where T <: InertialMotion,
+                    state::IBState{UniformGrid},
+                    prob::IBProblem,
+                    t::Float64)
     """
     Initialize irrotational freestream flux
+
+    Assumes same free-stream parameters for all motions
     """
+    grid, motion = prob.model.grid, prob.model.bodies[1].motion
     Uinf, α = motion.Uinf, motion.α
     m = grid.nx;
     n = grid.ny;
@@ -96,12 +108,16 @@ function base_flux!(state::IBState{UniformGrid},
     state.q0[ (m-1)*n+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
 end
 
-function base_flux!(state::IBState{MultiGrid},
-                    grid::MultiGrid,
-                    motion::InertialMotion)
+function base_flux!(::Type{T} where T <: InertialMotion,
+                    state::IBState{MultiGrid},
+                    prob::IBProblem,
+                    t::Float64)
     """
     Initialize irrotational freestream flux
+
+    Assumes same free-stream parameters for all motions
     """
+    grid, motion = prob.model.grid, prob.model.bodies[1].motion
     Uinf, α = motion.Uinf, motion.α
     m = grid.nx;
     n = grid.ny;
@@ -115,34 +131,8 @@ function base_flux!(state::IBState{MultiGrid},
     end
 end
 
-
-
-function base_flux_OLD!(state::IBState{UniformGrid},
-                    prob::IBProblem,
-                    t::Float64)
-    grid = prob.model.grid
-    motion = prob.model.bodies[1].motion
-    nu = grid.ny*(grid.nx-1);  # Number of x-flux points
-
-    # Alias working memory
-    ψ0 = prob.work.Γ1;
-    Γ0 = prob.work.Γ2;
-
-    ### Rotational part
-    # Get flux from curl of solid-body rotation
-    #  Note factor of 2 from angular velocity -> vorticity
-    Γ0 .= 2*grid.h^2*motion.θ̇(t)
-    circ2_st_vflx!(ψ0, state.q0, Γ0, prob.model)
-
-    ### Potential flow part
-    Ux0 =  motion.U(t)*cos(motion.θ(t))
-    Uy0 = -motion.U(t)*sin(motion.θ(t))
-    state.q0[1:nu, 1] .+= grid.h*Ux0          # x-flux
-    state.q0[nu+1:grid.nq, 1] .+= grid.h*Uy0  # y-velocity
-end
-
-
-function base_flux!(state::IBState{UniformGrid},
+function base_flux!(::Type{BodyFixed},
+                    state::IBState{UniformGrid},
                     prob::IBProblem,
                     t::Float64)
     grid = prob.model.grid
@@ -172,7 +162,8 @@ function base_flux!(state::IBState{UniformGrid},
     state.q0[nu+1:grid.nq, 1] .+= h*Uy0  # y-velocity
 end
 
-function base_flux!(state::IBState{MultiGrid},
+function base_flux!(::Type{BodyFixed},
+                    state::IBState{MultiGrid},
                     prob::IBProblem,
                     t::Float64)
     grid = prob.model.grid
@@ -213,7 +204,8 @@ end
 
 """
 #TODO: DO THIS WITHOUT circ2_st_vflx (DIRECT CROSS PRODUCT)
-function base_flux!(state::IBState{MultiGrid},
+function base_flux!(::Type{BodyFixed},
+                    state::IBState{MultiGrid},
                     prob::IBProblem,
                     t::Float64)
     grid = prob.model.grid
@@ -359,32 +351,29 @@ function get_trial_state!(qs::AbstractArray,
     circ2_st_vflx!( state.ψ, qs, Γs, prob.model, 2 );
 end
 
-
+"""
+Solve the modified Poisson equation (26)
+Dispatch based on the type of motion in the problem
+Allows precomputing regularization and interpolation for Static motions
+"""
 function boundary_forces!(F̃b::AbstractVector,
                           qs::AbstractVector,
                           q0::AbstractVector,
                           prob::AbstractIBProblem)
-    """
-    Solve the modified Poisson equation (26)
-    Dispatch based on the type of motion in the problem
-    Allows precomputing regularization and interpolation for Static motions
-    """
     boundary_forces!( MotionType(prob.model.bodies), F̃b, qs, q0, prob)
 end
 
+"""
+Solve the Poisson equation (25) in Colonius & Taira (2008)
+    for uB = 0 and bc2 = 0
+    Bf̃ = Eq
+       = ECψ
+"""
 function boundary_forces!(::Union{Type{Static}, Type{BodyFixed}},
                           F̃b::AbstractVector,
                           qs::AbstractVector,
                           q0::AbstractVector,
                           prob::AbstractIBProblem)
-    """
-    Solve the Poisson equation (25) in Colonius & Taira (2008)
-        for uB = 0 and bc2 = 0
-        Bf̃ = Eq
-           = ECψ
-
-    Note for BodyFixed debugging: this only takes place on finest grid
-    """
     E = prob.model.mats.E
     h = prob.model.grid.h
     # Working memory for in-place operations
