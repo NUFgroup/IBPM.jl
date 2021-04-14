@@ -1,10 +1,16 @@
 
 using LinearAlgebra: norm  # FOR DEBUGGING
 
-#Driver function that steps forward in time
-function advance!(t::Float64,
-                  state::IBState{UniformGrid},
-                  prob::IBProblem)
+"""
+    advance!(state::IBState, prob::IBProblem, t::Float64)
+
+Advance state forward in time.
+"""
+function advance!(state, prob, t) end
+
+function advance!(state::IBState{UniformGrid},
+                  prob::IBProblem,
+                  t::Float64)
     grid = prob.model.grid
 
     # Move bodies and update coupling matrices (E)
@@ -38,15 +44,9 @@ function advance!(t::Float64,
     state.cfl = maximum( abs.( (1/grid.h^2) * state.q * dt ) ) ;
 end
 
-function advance!(t::Float64,
-                  state::IBState{MultiGrid},
-                  prob::IBProblem)
-    """
-    After updating get_nonlin:
-        84.443 ms (1961 allocations: 76.93 MiB)
-    After optimization:
-        40.325 ms (719 allocations: 15.66 MiB)
-    """
+function advance!(state::IBState{MultiGrid},
+                  prob::IBProblem,
+                  t::Float64)
     grid = prob.model.grid
     update_bodies!(prob, t)
 
@@ -85,21 +85,24 @@ function advance!(t::Float64,
     state.cfl = maximum( abs.( (1/(grid.h^2)) * @view(state.q[:, 1]) * dt ) ) ;
 end
 
+"""
+    base_flux!(state::IBState, prob::IBProblem, t::Float64)
+
+Set background flux based on `prob.model.bodies[].motion`
+
+Assumes same free-stream parameters for all motions (<-- CHANGE THIS)
+"""
 function base_flux!(state::IBState,
                     prob::IBProblem,
                     t::Float64)
     base_flux!(MotionType(prob.model.bodies), state, prob, t)
 end
 
+"Initialize irrotational freestream flux when not time-varying"
 function base_flux!(::Type{T} where T <: InertialMotion,
                     state::IBState{UniformGrid},
                     prob::IBProblem,
                     t::Float64)
-    """
-    Initialize irrotational freestream flux
-
-    Assumes same free-stream parameters for all motions
-    """
     grid, motion = prob.model.grid, prob.model.bodies[1].motion
     Uinf, α = motion.Uinf, motion.α
     m = grid.nx;
@@ -108,15 +111,11 @@ function base_flux!(::Type{T} where T <: InertialMotion,
     state.q0[ (m-1)*n+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
 end
 
+"Initialize irrotational freestream flux when not time-varying"
 function base_flux!(::Type{T} where T <: InertialMotion,
                     state::IBState{MultiGrid},
                     prob::IBProblem,
                     t::Float64)
-    """
-    Initialize irrotational freestream flux
-
-    Assumes same free-stream parameters for all motions
-    """
     grid, motion = prob.model.grid, prob.model.bodies[1].motion
     Uinf, α = motion.Uinf, motion.α
     m = grid.nx;
@@ -131,6 +130,7 @@ function base_flux!(::Type{T} where T <: InertialMotion,
     end
 end
 
+"Update time-varying background flux for moving grid"
 function base_flux!(::Type{BodyFixed},
                     state::IBState{UniformGrid},
                     prob::IBProblem,
@@ -162,6 +162,7 @@ function base_flux!(::Type{BodyFixed},
     state.q0[nu+1:grid.nq, 1] .+= h*Uy0  # y-velocity
 end
 
+"Update time-varying background flux for moving grid"
 function base_flux!(::Type{BodyFixed},
                     state::IBState{MultiGrid},
                     prob::IBProblem,
@@ -242,21 +243,28 @@ function base_flux!(::Type{BodyFixed},
     end
 end"""
 
+"""
+    get_trial_state!(qs, Γs, state, prob)
+
+Compute trial circulation Γs that doesn't satisfy no-slip BCs
+
+Combine explicit Laplacian and nonlinear terms into a rhs
+   then invert implicit part to return trial circulation Γs
+
+High-level version of AB2:
+rhs = A*Γ .-
+      3*dt/2 * nonlin .+
+      dt/2 * nonlin_prev .+
+      dt/2 * rhsbc
+
+Then do Ainv of that to back out trial circ
+"""
+function get_trial_state!(qs, Γs, state, prob) end
+
 function get_trial_state!(qs::AbstractArray,
                         Γs::AbstractArray,
                        state::IBState{UniformGrid},
                        prob::IBProblem)
-    """
-    Combine explicit Laplacian and nonlinear terms into a rhs
-       then use Ainv to return trial circulation Γs
-
-    High-level version of AB2:
-    rhs = A*Γ .-
-    #    3*dt/2 * nonlin .+
-    #    dt/2 * nonlin_prev
-
-    Then do Ainv of that to back out trial circ
-    """
     dt = prob.scheme.dt
     work = prob.work
     rhs = work.Γ2  # RHS of discretized equation
@@ -288,18 +296,6 @@ function get_trial_state!(qs::AbstractArray,
                         Γs::AbstractArray,
                        state::IBState{MultiGrid},
                        prob::IBProblem)
-    """
-    Combine explicit Laplacian and nonlinear terms into a rhs
-       then use Ainv to return trial circulation Γs
-
-    High-level version of AB2:
-    rhs = A*Γ .-
-    #    3*dt/2 * nonlin .+
-    #    dt/2 * nonlin_prev .+
-    #    dt/2 * rhsbc
-
-    Then do Ainv of that to back out trial circ
-    """
     dt = prob.scheme.dt
     work = prob.work
     grid = prob.model.grid
@@ -352,9 +348,12 @@ function get_trial_state!(qs::AbstractArray,
 end
 
 """
-Solve the modified Poisson equation (26)
-Dispatch based on the type of motion in the problem
-Allows precomputing regularization and interpolation for Static motions
+    boundary_forces!(F̃b, qs, q0, prob)
+
+Solve the Poisson equation (25) in Colonius & Taira (2008).
+
+Dispatch based on the type of motion in the problem - allows precomputing
+    regularization and interpolation where possible.
 """
 function boundary_forces!(F̃b::AbstractVector,
                           qs::AbstractVector,
@@ -364,10 +363,13 @@ function boundary_forces!(F̃b::AbstractVector,
 end
 
 """
-Solve the Poisson equation (25) in Colonius & Taira (2008)
-    for uB = 0 and bc2 = 0
-    Bf̃ = Eq
-       = ECψ
+    boundary_forces!(::Union{Type{Static}, Type{BodyFixed}},
+                     F̃b, qs, q0, prob)
+
+Solve modified Poisson problem for uB = 0 and bc2 = 0
+```
+ Bf̃ = Eq = ECψ
+```
 """
 function boundary_forces!(::Union{Type{Static}, Type{BodyFixed}},
                           F̃b::AbstractVector,
@@ -383,18 +385,22 @@ function boundary_forces!(::Union{Type{Static}, Type{BodyFixed}},
     F̃b .= (1/h)*prob.Binv*F̃b                         # Allocates a small amount of memory
 end
 
+"""
+    boundary_forces!(::Type{RotatingCyl}, F̃b, qs, q0, prob)
+
+Solve the Poisson problem for bc2 = 0 with special case of rotating cylinder.
+
+In this case the points don't need to move, but they do have nonzero velocity
+```
+Bf̃ = Eq - ub
+   = ECψ - ub
+```
+"""
 function boundary_forces!(::Type{RotatingCyl},
                           F̃b::AbstractVector,
                           qs::AbstractVector,
                           q0::AbstractVector,
                           prob::AbstractIBProblem)
-    """
-    Solve the Poisson equation (25) in Colonius & Taira (2008)
-        for bc2 = 0 with specialized situation of rotating cylinder
-    In this case the points don't need to move, but do have nonzero velocity
-        Bf̃ = Eq - ub
-           = ECψ - ub
-    """
     E = prob.model.mats.E
     h = prob.model.grid.h
 
@@ -408,17 +414,18 @@ function boundary_forces!(::Type{RotatingCyl},
     mul!(F̃b, prob.Binv, F̃work/h);
 end
 
+"""
+    project_circ!(Γs, state, prob)
 
+Update circulation to satisfy no-slip condition.
 
+Dispatch based on the type of motion in the problem.
+
+This allows precomputing regularization and interpolation where possible.
+"""
 function project_circ!(Γs::AbstractArray,
                      state::IBState,
                      prob::IBProblem)
-    """
-    Update circulation to satisfy no-slip condition
-
-    Dispatch based on the type of motion in the problem
-    Allows precomputing regularization and interpolation for Static motions
-    """
     project_circ!(MotionType(prob.model.bodies), Γs, state, prob)
 end
 
@@ -428,7 +435,7 @@ function project_circ!(::Type{V} where V<:Motion,
                        prob::IBProblem)
     """
     High-level version:
-        state.Γ[:, 1] .= Γs .- Array(prob.Ainv[1] * (mats.RET*fb_til_dt) )
+        state.Γ[:, 1] .= Γs .- prob.Ainv[1] * (mats.RET*fb_til_dt)
     """
     Γwork = @view(prob.work.Γ3[:, 1]) # Working memory
     RET = prob.model.mats.RET   # Precomputed R * E'
@@ -441,14 +448,13 @@ function project_circ!(::Type{V} where V<:Motion,
     state.Γ[:, 1] .-= Γwork
 end
 
-
 function project_circ!(::Type{V} where V<:Motion,
                        Γs::AbstractArray,
                        state::IBState{MultiGrid},
                        prob::IBProblem)
     """
-    High-level version:s
-        state.Γ[:, 1] .= Γs .- Array(prob.Ainv[1] * (mats.RET*fb_til_dt) )
+    High-level version:
+        state.Γ[:, 1] .= Γs .- prob.Ainv[1] * (mats.RET*fb_til_dt)
     """
     Γwork = @view(prob.work.Γ3[:, 1]) # Working memory
     RET = prob.model.mats.RET   # Precomputed R * E'
@@ -462,13 +468,15 @@ function project_circ!(::Type{V} where V<:Motion,
 end
 
 #Utilities for storing stress values
+"""
+    update_stress!(state, prob)
+
+Store surface stresses and integrated forces.
+
+Mutates "state"
+"""
 function update_stress!(state::IBState,
                         prob::IBProblem)
-    """
-    Store surface stresses and integrated forces
-
-    Mutates "state"
-    """
     nb, nf = get_body_info(prob.model.bodies)
     h = prob.model.grid.h
     dt = prob.scheme.dt
@@ -490,15 +498,23 @@ function update_stress!(state::IBState,
     end
 end
 
+"""
+    AB2(dt::Float64)
 
+Initialize second-order Adams-Bashforth scheme.
+"""
 function AB2(dt::Float64)
-    """
-    Initialize second-order Adams-Bashforth scheme
-    """
     return AdamsBashforth(dt, [1.5, -0.5])
 end
 
-#TODO: break out by multiple dispatch... but don't duplicate code
+
+"""
+    update_bodies!(prob, t)
+
+Update the immersed bodies and coupling matrices (if applicable).
+
+TODO: break out by multiple dispatch... but don't duplicate code
+"""
 function update_bodies!(prob::IBProblem, t::Float64)
     model = prob.model
     bodies, grid = prob.model.bodies, prob.model.grid

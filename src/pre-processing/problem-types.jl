@@ -86,12 +86,12 @@ See Hsieh-Chen Tsai thesis (2016) for derivation
 
 Specify the linear and angular velocities relative to the lab frame
 
-Note that the angular velocity is the negative of aerodynamic pitch
+Note that the angular velocity θ is the negative of aerodynamic pitch
 """
 mutable struct BodyFixed <: Motion
     U::Any            # Free-stream velocity U(t)
     θ::Any            # Angular position
-    θ̇::Any            # Angular velocity   
+    θ̇::Any            # Angular velocity
 end
 
 """

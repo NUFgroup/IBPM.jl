@@ -1,17 +1,24 @@
 """
-Support for constructing basic bodies
+Support for constructing basic bodies:
+    * Flat 1D plate
+    * Circular cylinder
+    * 4-digit NACA airfoils
 """
 
-function make_plate(L, α, h, x0, y0, motion; n=0)
-    # build plate of length L at AoA α, using flow grid spacing of h
-    # (structure will have a spacing of 2h)
+"""
+    make_plate(L, α, h, x0, y0, motion; n=0)
 
+Build plate of length L at AoA α based on grid spacing of h.
+
+If n \neq 0, choose so that ds=2h
+"""
+function make_plate(L, α, h, x0, y0, motion; n=0)
     # Get # of points such that ds = 2h
     if (n==0)
-        n = Int( floor( L / h / 2 ) );
+        n = Int( floor( L / h / 2 ) ) + 1;
     end
 
-    spt = L.*(0:(n-1))/n;  # Range (0, L)
+    spt = L.*(0:(n-1))/(n-1);  # Range (0, L)
     xhat = spt*cos.(-α);
     yhat = spt*sin.(-α);
 
@@ -21,13 +28,16 @@ function make_plate(L, α, h, x0, y0, motion; n=0)
     ds = sqrt( (xhat[2] - xhat[1])^2 + (yhat[2] - yhat[1])^2 ) ;
 
     return RigidBody(motion, xb, copy(xb), 0.0*xb, fill(ds, n))
-
 end
 
-function make_cylinder(r, h, x0, y0, motion; n=0)
-    # build cylinder of radius r using flow grid spacing of h
-    # (cylinder will have a spacing of 2h)
+"""
+    make_cylinder(r, h, x0, y0, motion; n=0)
 
+Build cylinder of radius r based on grid spacing of h.
+
+If n \neq 0, choose so that ds=2h.
+"""
+function make_cylinder(r, h, x0, y0, motion; n=0)
     circum = 2 * π * r; #  Circumference of the circle
 
     # Get # of points such that ds = 2h
@@ -48,6 +58,11 @@ function make_cylinder(r, h, x0, y0, motion; n=0)
     return RigidBody(motion, xb, copy(xb), 0.0*xb, fill(ds, n))
 end
 
+"""
+    make_naca(x0, N, spec, motion)
+
+Generate 4-digit NACA airfoil based on string `spec`.
+"""
 function make_naca(x0, N, spec, motion)
 
     # Define x-locations
@@ -73,12 +88,14 @@ function make_naca(x0, N, spec, motion)
     return RigidBody(motion, xb, copy(xb), 0.0*xb, ds[:, 1])
 end
 
+"""
+    naca(x, spec)
 
+Compute points on 4-digit NACA airfoils
+
+x - x/c, so that x ∈ (0, 1)
+"""
 function naca(x, spec)
-    """
-    Compute points on 4-digit NACA airfoils
-    x - x/c, so that x ∈ (0, 1)
-    """
     # First, break down spec
     m = parse(Int, spec[1])/100.    # Maximum camber
     p = parse(Int, spec[2])/10.     # Location of max. camber
@@ -102,19 +119,19 @@ function naca(x, spec)
 
     yt = 5*t*(0.2969*sqrt.(x) - 0.1260.*x - 0.3516.*x.^2 + 0.2843.*x.^3 - 0.1036.*x.^4 );
 
-
     xU = x .- yt.*sin.(θ)
     xL = x .+ yt.*sin.(θ)
     yU = yc .+ yt.*cos.(θ)
     yL = yc .- yt.*cos.(θ)
 
-    #return xU, xL, yU, yL
     return yc, xU, xL, yU, yL
 end
 
+"""
+    sym_naca(x, spec)
+
+Function naca(x, t) for points on symmetric 4-digit airfoils
+"""
 function sym_naca(x, spec)
-    """
-    Compute points on symmetric 4-digit airfoils
-    """
     sym_naca(x, t) = 5*t*(0.2969*sqrt(x) - 0.1260*x - 0.3516*x^2 + 0.2843*x^3 - 0.1036*x^4 );
 end

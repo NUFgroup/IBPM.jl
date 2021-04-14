@@ -26,19 +26,17 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     r = body.lengthscale
 
     if body.motion == "static"
-        motion=Static()
+        motion=Static(Uinf, α)
     elseif body.motion == "rot_cyl"
         motion=RotatingCyl(body.θ̇)
     end
     cyls = [make_cylinder( r, grid.h, 0.0, 0.0, motion )]
 
     prob = init_prob(grid, cyls, Re, Δt);
+
     state = init_state(prob);
 
-    println(prob.model.bodies)
-
-    Uinf = []
-    base_flux!(state, grid, motion)  # Initialize irrotational base flux
+    base_flux!(state, prob, 0.0)  # Initialize irrotational base flux
 
     timesteps = round(Int, T/Δt)
 
@@ -58,7 +56,8 @@ end
 function run_sim(it_stop, state, prob)
     for it=1:it_stop
         t = prob.scheme.dt*it
-        advance!(t, state, prob)
+    	advance!(state, prob, t[i])
+        @show (it, state.CD, state.CL, state.cfl)
         if mod(it,20) == 0
             @show (it, state.CD, state.CL, state.cfl)
         end
