@@ -8,7 +8,7 @@ changed to quarter chord.
 
 There are four relevant scripts here:
 
-1. `setup_prob.jl` - Initialize shared variables (to make sure all scripts will use the same grid and body definitions)
+1. `config.jl` - Initialize shared variables (to make sure all scripts will use the same grid and body definitions)
 2. `steady_bl.jl` - Solve steady boundary layer flow over the flate plate at zero angle of attack
 3. `pitching_maneuver.jl` - Full pitch-hold maneuver with moving grid formulation
 4. `plot_results.jl` - Load and plot $C_L$ comparison against C++ and Fortran implementations.

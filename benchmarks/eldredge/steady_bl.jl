@@ -1,5 +1,5 @@
 ### Steady flat plate boundary layer
-include("setup_prob.jl")  # Set up grid and other variables
+include("config.jl")  # Set up grid and other variables
 using BSON: @save, @load
 
 Δt = 1e-2

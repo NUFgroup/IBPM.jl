@@ -1,5 +1,5 @@
 ### Benchmark with canonical Eldredge pitch/plunge maneuver
-include("setup_prob.jl")  # Set up grid and other parameters
+include("config.jl")  # Set up grid and other parameters
 using Plots
 using BSON: @save, @load
 using MAT
