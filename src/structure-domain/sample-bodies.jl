@@ -10,7 +10,7 @@ Support for constructing basic bodies:
 
 Build plate of length L at AoA α based on grid spacing of h.
 
-If n \neq 0, choose so that ds=2h.  Also note that α here is different from
+If n = 0, choose so that ds=2h.  Also note that α here is different from
 the free-stream flux definition, i.e. you can either incline the plate or change
 the angle of the free-stream flow (but you probably don't want to do both)
 """

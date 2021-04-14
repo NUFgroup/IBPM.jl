@@ -22,20 +22,6 @@ function get_ub(bodies::Array{V, 1} where V<:Body)
 end
 
 
-function MotionType( body::V where V<:Body )
-    return typeof(body.motion)
-end
-
-function MotionType( bodies::Array{V, 1} where V<:Body )
-    motions = [typeof(bodies[i].motion) for i=1:length(bodies)]
-    if all(motions .== motions[1])
-        return motions[1]
-    else
-        return Motion
-    end
-end
-
-
 function get_transformation(
         motion::MotionFunction,
         t::Float64   # Should be time of the *next* step (i.e. t[k+1])

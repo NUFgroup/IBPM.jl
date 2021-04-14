@@ -1,4 +1,3 @@
-
 using LinearAlgebra: norm  # FOR DEBUGGING
 
 """
@@ -171,35 +170,32 @@ function base_flux!(::Type{MovingGrid},
     @assert length(prob.model.bodies) == 1 # Assumes only one body
     grid = prob.model.grid
     motion = prob.model.bodies[1].motion
-    nx, ny, h = grid.nx, grid.ny, grid.h;
-    nu = ny*(nx-1);  # Number of x-flux points
+    XX, YY = prob.model.XX, prob.model.YY;
+    nu = grid.ny*(grid.nx-1);  # Number of x-flux points
 
     ### Rotational part
     Ω = -motion.θ̇(t)
     α = -motion.θ(t)
 
-    state.q0 .*= 0.0
-    for lev=1:grid.mg
-        hc = h*2^(lev-1);  # Coarse grid spacing
-
-        ### x-fluxes
-        y = @. ((1:ny)-0.5-ny/2)*hc + ny/2*h - grid.offy
-        YY = ones(nx-1)*y'
-        state.q0[1:nu, lev] .= -hc*Ω*YY[:]
-
-        ### y-fluxes
-        x = @. ((1:nx)-0.5-nx/2)*hc + nx/2*h - grid.offx
-        XX = x*ones(ny-1)'
-        state.q0[nu+1:end, lev] .= hc*Ω*XX[:]
-    end
-
     ### Potential flow part (note θ = -α for angle of attack)
     Ux0 = motion.U(t)*cos(α)
     Uy0 = motion.U(t)*sin(α)
-    for lev=1:grid.mg
-        # Coarse grid spacing
-        hc = h*2^(lev-1 );
 
+    state.q0 .*= 0.0
+    for lev=1:grid.mg
+        hc = grid.h*2^(lev-1);  # Coarse grid spacing
+
+        ### x-fluxes
+        #y = @. ((1:ny)-0.5-ny/2)*hc + ny/2*h - grid.offy
+        #YY = ones(nx-1)*y'   # TODO:  Pre-compute or find a better way to do this
+        state.q0[1:nu, lev] .= -hc*Ω*YY[:, lev]
+
+        ### y-fluxes
+        #x = @. ((1:nx)-0.5-nx/2)*hc + nx/2*h - grid.offx
+        #XX = x*ones(ny-1)'   # TODO:  Pre-compute or find a better way to do this
+        state.q0[nu+1:end, lev] .= hc*Ω*XX[:, lev]
+
+        ### Irrotational part
         state.q0[1:nu, lev] .+= hc*Ux0          # x-flux
         state.q0[nu+1:end, lev] .+= hc*Uy0  # y-velocity
     end

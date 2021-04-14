@@ -9,8 +9,8 @@ using IterativeSolvers
 export IBPM_advance
 
 #Caution, include order matters!
-include("pre-processing/pre-processing-include.jl")
 include("fluid-domain/fluid-domain-include.jl")
+include("pre-processing/pre-processing-include.jl")
 include("structure-domain/structure-domain-include.jl")
 include("fluid-operators/fluid-operators-include.jl")
 include("interface-coupling/interface-coupling-include.jl")
@@ -38,9 +38,9 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     end
     cyls = [make_cylinder( r, grid.h, 0.0, 0.0; motion=motion )]
 
-    prob = init_prob(grid, cyls, Δt, Re, Uinf=Uinf, α=α);
+    prob = IBProblem(grid, cyls, Δt, Re, Uinf=Uinf, α=α);
 
-    state = init_state(prob);
+    state = IBState(prob);
 
     base_flux!(state, prob, 0.0)  # Initialize irrotational base flux
 

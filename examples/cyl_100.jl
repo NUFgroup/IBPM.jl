@@ -26,8 +26,8 @@ Uinf = 1.0;   # Free-stream flow
 r = 0.5; # Cylinder radius
 cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0 )]
 
-prob = ibpm.init_prob(grid, cyls, Δt, Re, Uinf=Uinf);
-state = ibpm.init_state(prob);
+prob = ibpm.IBProblem(grid, cyls, Δt, Re, Uinf=Uinf);
+state = ibpm.IBState(prob);
 ibpm.base_flux!(state, prob, 0.0)  # Initialize irrotational base flux
 
 T=100.0

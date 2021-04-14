@@ -210,7 +210,13 @@ function get_Ainv(model::IBModel{<:Grid, <:Body}, dt::Float64;
 end
 
 
-
+"""
+Compute the matrix (as a LinearMap) that represents the modified Poisson
+operator (I + dt/2 * Beta * RC) arising from the implicit treatment of the
+Laplacian. A system involving this matrix is solved to compute a trial
+circulation that doesn't satisfy the BCs, and then again to use the surface
+stresses to update the trial circulation so that it satisfies the BCs
+"""
 function get_A(model::IBModel{UniformGrid, <:Body}, dt::Float64)
     A = I - (dt/2 / (model.grid.h^2))*model.mats.Lap
     Ainv = get_Ainv(model, dt)
@@ -322,8 +328,6 @@ function get_B(model::IBModel{MultiGrid, RigidBody{MotionFunction}}, Ainv)
 
     return Binv
 end
-
-
 
 function B_times!(x::Array{Float64, 2},
                   z::Array{Float64, 2},

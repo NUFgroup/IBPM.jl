@@ -8,10 +8,10 @@ t = 0:Δt:T
 
 # Create plate
 bodies = [ibpm.make_plate( L, α, grid.h, x0, y0; n=nb)]
-prob = ibpm.init_prob(grid, bodies, Δt, Re; Uinf=Uinf);
+prob = ibpm.IBProblem(grid, bodies, Δt, Re; Uinf=Uinf);
 
 #@load "benchmarks/eldredge/steady.bson" state
-state = ibpm.init_state(prob);
+state = ibpm.IBState(prob);
 ibpm.base_flux!(state, prob, t[1])  # Initialize irrotational base flux
 
 function run_sim(t, state, prob)

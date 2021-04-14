@@ -30,8 +30,8 @@ nb = 48;  # Number of body points
 spec = "0012"
 bodies = [ibpm.make_naca(x0, nb, spec, motion=motion)]
 
-prob = ibpm.init_prob(grid, bodies, Δt, Re);
-state = ibpm.init_state(prob);
+prob = ibpm.IBProblem(grid, bodies, Δt, Re);
+state = ibpm.IBstate(prob);
 ibpm.base_flux!(state, prob, 0.0)  # Initialize base flux
 
 T=2.0*(2π/ω)

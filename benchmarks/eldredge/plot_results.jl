@@ -10,7 +10,7 @@ t1, t2, t3, t4 = 1+t0, 3+t0, 4+t0, 6+t0
 G(t) = @. log( cosh(a*(t-t1))*cosh(a*(t-t4))/(  cosh(a*(t-t2))*cosh(a*(t-t3)) ) )
 Ġ(t) = @. a*(tanh(a*(t-t1))-tanh(a*(t-t2))-tanh(a*(t-t3))+tanh(a*(t-t4)));
 
-file = matopen("benchmarks/eldredge/results/force_jl1.mat", "r")
+file = matopen("benchmarks/eldredge/results/force_jl.mat", "r")
 t_jl = read(file, "t")
 CL_jl = read(file, "CL")
 CD_jl = read(file, "CD")

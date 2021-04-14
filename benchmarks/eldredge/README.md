@@ -20,9 +20,10 @@ The Blasius prediction is 0.2256, but that's assuming parallel flow, i.e. no pre
 
 | Package      |  $C_D$ |
 | ----------- |  -----|
-| Julia | 0.3988 |
-| Fortran | 0.3952 |
+| Julia | 0.3987   |
+| Fortran | 0.3942 |
 | C++ | 0.3828 |
+| Matlab |  0.3973  |  <== SHOULD MATCH JULIA EXACTLY!!!
 
 ### $C_L$ comparison
 
