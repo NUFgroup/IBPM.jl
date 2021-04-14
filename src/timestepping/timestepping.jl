@@ -16,7 +16,7 @@ function advance!(state::IBState{UniformGrid},
     # Move bodies and update coupling matrices (E)
     update_bodies!(prob, t)
 
-    if MotionType(prob.model.bodies) == BodyFixed
+    if MotionType(prob.model.bodies) == MovingGrid
         base_flux!(state, prob, t)
     end
 
@@ -50,7 +50,7 @@ function advance!(state::IBState{MultiGrid},
     grid = prob.model.grid
     update_bodies!(prob, t)
 
-    if MotionType(prob.model.bodies) == BodyFixed
+    if MotionType(prob.model.bodies) == MovingGrid
         base_flux!(state, prob, t)
     end
 
@@ -131,7 +131,7 @@ function base_flux!(::Type{T} where T <: InertialMotion,
 end
 
 "Update time-varying background flux for moving grid"
-function base_flux!(::Type{BodyFixed},
+function base_flux!(::Type{MovingGrid},
                     state::IBState{UniformGrid},
                     prob::IBProblem,
                     t::Float64)
@@ -164,7 +164,7 @@ function base_flux!(::Type{BodyFixed},
 end
 
 "Update time-varying background flux for moving grid"
-function base_flux!(::Type{BodyFixed},
+function base_flux!(::Type{MovingGrid},
                     state::IBState{MultiGrid},
                     prob::IBProblem,
                     t::Float64)
@@ -207,7 +207,7 @@ end
 
 """
 #TODO: DO THIS WITHOUT circ2_st_vflx (DIRECT CROSS PRODUCT)
-function base_flux!(::Type{BodyFixed},
+function base_flux!(::Type{MovingGrid},
                     state::IBState{MultiGrid},
                     prob::IBProblem,
                     t::Float64)
@@ -365,7 +365,7 @@ function boundary_forces!(F̃b::AbstractVector,
 end
 
 """
-    boundary_forces!(::Union{Type{Static}, Type{BodyFixed}},
+    boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
                      F̃b, qs, q0, prob)
 
 Solve modified Poisson problem for uB = 0 and bc2 = 0
@@ -373,7 +373,7 @@ Solve modified Poisson problem for uB = 0 and bc2 = 0
  Bf̃ = Eq = ECψ
 ```
 """
-function boundary_forces!(::Union{Type{Static}, Type{BodyFixed}},
+function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
                           F̃b::AbstractVector,
                           qs::AbstractVector,
                           q0::AbstractVector,

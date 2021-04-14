@@ -71,7 +71,7 @@ mutable struct MotionFunction <: InertialMotion
 end
 
 """
-Body-fixed (non-inertial) reference frame
+Body-fixed (non-inertial frame)... but really inertial equations on a moving grid
 
 Express arbitrary motion as a combination of translation and a rotation
  => becomes a superposition of time-varying potential flow and
@@ -81,9 +81,9 @@ See Hsieh-Chen Tsai thesis (2016) for derivation
 Specify the linear and angular velocities relative to the lab frame
 
 Note that the angular velocity θ is the negative of aerodynamic pitch.
-This will override the definition of Uinf in the parent IBModel
+This will override the definition of Uinf in the parent IBModel.
 """
-mutable struct BodyFixed <: Motion
+mutable struct MovingGrid <: Motion
     U::Any            # Free-stream velocity U(t)
     θ::Any            # Angular position
     θ̇::Any            # Angular velocity
@@ -105,7 +105,6 @@ end
 """
 Matrices that can be precomputed
 """
-
 mutable struct IBMatrices
     C::SparseArrays.SparseMatrixCSC{Float64,Int64}
     Lap::SparseArrays.SparseMatrixCSC{Float64,Int64}
@@ -147,7 +146,11 @@ end
 
 """
 SolnModel contains information about simulation parameters and stores
-all static (non-time varying) matrices
+all static (non-time varying) matrices.
+
+From a method-of-lines perspective, this should contain everything related
+    to the continuous-time problem... analogous to defining the RHS of an ODE.
+    Then everything related to time-stepping goes in the IBProblem
 """
 abstract type SolnModel end
 
@@ -163,7 +166,10 @@ end
 """
 IBProblem has the info of IBModel as well as the problem structure (e.g., the
 explicit time stepping scheme and information about the implicit treatment via
-the A and B matrices and their inverses)
+the A and B matrices and their inverses).
+
+Looking towards possible compatibility with DifferentialEquations.jl, this
+    would be similar to the ODEProblem
 """
 abstract type AbstractIBProblem end
 
@@ -177,7 +183,7 @@ mutable struct IBProblem <: AbstractIBProblem
 end
 
 """
-state variables (stores everything needed for time stepping)
+State variables (stores everything needed for time stepping)
 """
 abstract type State end
 

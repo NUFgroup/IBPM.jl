@@ -94,7 +94,7 @@ end
 
 # TODO: DO WE NEED THIS?? SEEMS LIKE MAYBE NOT...
 function move_body!(
-    ::Type{BodyFixed},
+    ::Type{MovingGrid},
     body::RigidBody,
     t::Float64
     )

@@ -18,7 +18,7 @@ G_max = maximum(G(t))
 θ(t) = -α_max*G(t)/G_max
 θ̇(t) = -α_max*Ġ(t)/G_max
 
-motion = ibpm.BodyFixed(t -> Uinf, θ, θ̇)
+motion = ibpm.MovingGrid(t -> Uinf, θ, θ̇)
 
 # Create plate
 bodies = [ibpm.make_plate( L, α, grid.h, x0, y0; motion=motion, n=nb)]
@@ -64,7 +64,7 @@ end
 F = zeros(length(t), 2)
 
 # To benchmark
-#runtime = @elapsed run_sim(t, F, state, prob)
+runtime = @elapsed run_sim(t, F, state, prob)
 
 # To visualize
 #anim =  animated_sim(t, F, state, prob) #advance to final time

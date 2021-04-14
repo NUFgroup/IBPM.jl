@@ -36,7 +36,7 @@ Uinf(t) = 1.0;
 t_init = 0;  # Let flow equilibrate first
 θ̇(t) = t>t_init ? 0.1 : 0.0
 θ(t) = θ̇(t)*(t-t_init);
-motion = ibpm.BodyFixed(Uinf, θ, θ̇)
+motion = ibpm.MovingGrid(Uinf, θ, θ̇)
 
 # Create cylinder
 r = 0.5; # Cylinder radius

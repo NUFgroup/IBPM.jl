@@ -18,11 +18,11 @@ Re = 200.0
 Δt = 1e-3
 
 # Initialize motion
-ω = 0.1            # Pitch frequency
+ω = 2π*0.1          # Pitch frequency
 A = 40.0 * π/180.0  # Pitch amplitude, degrees
 θ(t) = -A*sin(ω*t)
 θ̇(t) = -ω*A*cos(ω*t);
-motion = ibpm.BodyFixed(t -> 1.0, θ, θ̇)
+motion = ibpm.MovingGrid(t -> 1.0, θ, θ̇)
 
 # Create plate
 x0 = 0.25
@@ -30,7 +30,7 @@ nb = 48;  # Number of body points
 spec = "0012"
 bodies = [ibpm.make_naca(x0, nb, spec, motion=motion)]
 
-prob = ibpm.init_prob(grid, bodies, Re, Δt);
+prob = ibpm.init_prob(grid, bodies, Δt, Re);
 state = ibpm.init_state(prob);
 ibpm.base_flux!(state, prob, 0.0)  # Initialize base flux
 
@@ -51,19 +51,19 @@ end
 
 function run_sim(it_stop, state, prob)
     nplt = 100
-    big_iter = it_stop÷nplt
-    anim = @animate for i=1:big_iter
+    plt_iter = it_stop÷nplt
+    anim = @animate for i=1:plt_iter
         for j=1:nplt
-            it = nplt*i + j
+            it = nplt*(i-1) + j
             t = prob.scheme.dt*it
             ibpm.advance!(state, prob, t)
         end
         @show (nplt*i, state.CD, state.CL, state.cfl)
-        ibpm.plot_state(state, prob.model.grid; clims=(-5, 5))
+        ibpm.plot_state(state, prob.model.grid; clims=(-5, 5), lev=1)
         display( plot_naca(prob.model.bodies[1]) )
     end
     return anim
 end
 
 anim = run_sim(timesteps, state, prob) #advance to final time
-gif(anim, "pitching_naca.gif", fps = 30)
+gif(anim, "examples/pitching_naca.gif", fps = 30)

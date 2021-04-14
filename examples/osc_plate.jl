@@ -19,7 +19,7 @@ Re = 200.0
 
 # Initialize motion
 Uinf(t) = sin(t);
-motion = ibpm.BodyFixed(Uinf, t -> 0.0, t-> 0.0)
+motion = ibpm.MovingGrid(Uinf, t -> 0.0, t-> 0.0)
 
 # Create plate
 L = 1.0; # Plate length
@@ -54,4 +54,4 @@ function run_sim(it_stop, state, prob)
 end
 
 anim = run_sim(timesteps, state, prob) #advance to final time
-gif(anim, "osc_plate.gif", fps = 30)
+gif(anim, "examples/osc_plate.gif", fps = 30)
