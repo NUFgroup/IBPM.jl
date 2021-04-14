@@ -18,24 +18,23 @@ Re = 200.0
 Δt = 1e-3
 
 # Initialize motion
-Uinf(t) = 1.0;
-fb = 0.1
+ω = 0.1            # Pitch frequency
 A = 40.0 * π/180.0  # Pitch amplitude, degrees
-θ(t) = -A*sin(2π*fb*t)
-θ̇(t) = -2π*fb*A*cos(2π*fb*t);
-motion = ibpm.BodyFixed(Uinf, θ, θ̇)
+θ(t) = -A*sin(ω*t)
+θ̇(t) = -ω*A*cos(ω*t);
+motion = ibpm.BodyFixed(t -> 1.0, θ, θ̇)
 
 # Create plate
 x0 = 0.25
 nb = 48;  # Number of body points
 spec = "0012"
-bodies = [ibpm.make_naca(x0, nb, spec, motion)]
+bodies = [ibpm.make_naca(x0, nb, spec, motion=motion)]
 
 prob = ibpm.init_prob(grid, bodies, Re, Δt);
 state = ibpm.init_state(prob);
-ibpm.base_flux!(state, prob, 0.0)  # Initialize irrotational base flux
+ibpm.base_flux!(state, prob, 0.0)  # Initialize base flux
 
-T=2.0/fb
+T=2.0*(2π/ω)
 timesteps = round(Int, T/Δt)
 println(timesteps)
 
@@ -57,7 +56,7 @@ function run_sim(it_stop, state, prob)
         for j=1:nplt
             it = nplt*i + j
             t = prob.scheme.dt*it
-            ibpm.advance!(t, state, prob)
+            ibpm.advance!(state, prob, t)
         end
         @show (nplt*i, state.CD, state.CL, state.cfl)
         ibpm.plot_state(state, prob.model.grid; clims=(-5, 5))

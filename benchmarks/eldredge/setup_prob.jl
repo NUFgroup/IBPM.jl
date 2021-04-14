@@ -23,4 +23,4 @@ L = 1.0   # Plate length
 
 # Initialize motion
 Uinf = 1.0;  # Free-stream velocity
-α = 0.0      # Free-stream AoA
+α = 0.0;

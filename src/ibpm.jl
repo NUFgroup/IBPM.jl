@@ -17,6 +17,12 @@ include("interface-coupling/interface-coupling-include.jl")
 include("plotting/plotting-include.jl")
 include("timestepping/timestepping-include.jl")
 
+"""
+Convenience function to solve the full problem and plot final solution
+    for flow over a single cylinder
+
+For more control, just use this as a template - see benchmarks and examples
+"""
 function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     Uinf=1.0, α=0.0, T=20.0*dt, plot=false)
     # MultiGrid
@@ -26,13 +32,13 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     r = body.lengthscale
 
     if body.motion == "static"
-        motion=Static(Uinf, α)
+        motion=Static()
     elseif body.motion == "rot_cyl"
         motion=RotatingCyl(body.θ̇)
     end
-    cyls = [make_cylinder( r, grid.h, 0.0, 0.0, motion )]
+    cyls = [make_cylinder( r, grid.h, 0.0, 0.0; motion=motion )]
 
-    prob = init_prob(grid, cyls, Re, Δt);
+    prob = init_prob(grid, cyls, Δt, Re, Uinf=Uinf, α=α);
 
     state = init_state(prob);
 
@@ -56,7 +62,7 @@ end
 function run_sim(it_stop, state, prob)
     for it=1:it_stop
         t = prob.scheme.dt*it
-    	advance!(state, prob, t[i])
+    	advance!(state, prob, t)
         @show (it, state.CD, state.CL, state.cfl)
         if mod(it,20) == 0
             @show (it, state.CD, state.CL, state.cfl)

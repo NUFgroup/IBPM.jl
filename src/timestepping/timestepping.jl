@@ -103,8 +103,8 @@ function base_flux!(::Type{T} where T <: InertialMotion,
                     state::IBState{UniformGrid},
                     prob::IBProblem,
                     t::Float64)
-    grid, motion = prob.model.grid, prob.model.bodies[1].motion
-    Uinf, α = motion.Uinf, motion.α
+    grid = prob.model.grid
+    Uinf, α = prob.model.Uinf, prob.model.α
     m = grid.nx;
     n = grid.ny;
     state.q0[ 1:(m-1)*n ] .= Uinf * grid.h * cos(α);  # x-flux
@@ -116,8 +116,8 @@ function base_flux!(::Type{T} where T <: InertialMotion,
                     state::IBState{MultiGrid},
                     prob::IBProblem,
                     t::Float64)
-    grid, motion = prob.model.grid, prob.model.bodies[1].motion
-    Uinf, α = motion.Uinf, motion.α
+    grid = prob.model.grid
+    Uinf, α = prob.model.Uinf, prob.model.α
     m = grid.nx;
     n = grid.ny;
     for lev = 1 : grid.mg
@@ -135,6 +135,7 @@ function base_flux!(::Type{BodyFixed},
                     state::IBState{UniformGrid},
                     prob::IBProblem,
                     t::Float64)
+    @assert length(prob.model.bodies) == 1 # Assumes only one body
     grid = prob.model.grid
     motion = prob.model.bodies[1].motion
     nu = grid.ny*(grid.nx-1);  # Number of x-flux points
@@ -167,6 +168,7 @@ function base_flux!(::Type{BodyFixed},
                     state::IBState{MultiGrid},
                     prob::IBProblem,
                     t::Float64)
+    @assert length(prob.model.bodies) == 1 # Assumes only one body
     grid = prob.model.grid
     motion = prob.model.bodies[1].motion
     nx, ny, h = grid.nx, grid.ny, grid.h;
@@ -180,12 +182,12 @@ function base_flux!(::Type{BodyFixed},
     for lev=1:grid.mg
         hc = h*2^(lev-1);  # Coarse grid spacing
 
-        ### x-flux
+        ### x-fluxes
         y = @. ((1:ny)-0.5-ny/2)*hc + ny/2*h - grid.offy
         YY = ones(nx-1)*y'
         state.q0[1:nu, lev] .= -hc*Ω*YY[:]
 
-        ### y-flux
+        ### y-fluxes
         x = @. ((1:nx)-0.5-nx/2)*hc + nx/2*h - grid.offx
         XX = x*ones(ny-1)'
         state.q0[nu+1:end, lev] .= hc*Ω*XX[:]

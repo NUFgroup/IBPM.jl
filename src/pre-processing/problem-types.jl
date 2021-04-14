@@ -43,14 +43,10 @@ abstract type InertialMotion <: Motion end
 
 # Fixed bodies - no motion
 struct Static <: InertialMotion
-    Uinf::Float64       # Free-stream velocity
-    α::Float64          # Angle of attack
 end
 
 # Rotating cylinder-specific type
 struct RotatingCyl <: InertialMotion
-    Uinf::Float64            # Free-stream velocity
-    α::Float64               # Angle of attack
     Ω::Float64               # Angular velocity (constant)
 end
 
@@ -70,8 +66,6 @@ struct TangentSE2
 end
 
 mutable struct MotionFunction <: InertialMotion
-    Uinf::Float64            # Free-stream velocity
-    α::Float64               # Angle of attack
     xc::Any                  # Center position [x, y, θ] = xc(t)
     uc::Any                  # Center velocity [ẋ, ẏ, θ̇] = uc(t)
 end
@@ -86,7 +80,8 @@ See Hsieh-Chen Tsai thesis (2016) for derivation
 
 Specify the linear and angular velocities relative to the lab frame
 
-Note that the angular velocity θ is the negative of aerodynamic pitch
+Note that the angular velocity θ is the negative of aerodynamic pitch.
+This will override the definition of Uinf in the parent IBModel
 """
 mutable struct BodyFixed <: Motion
     U::Any            # Free-stream velocity U(t)
@@ -160,6 +155,8 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
     grid::T
     bodies::Array{V, 1}         # Array of bodies
     Re::Float64                 # Reynolds number
+    Uinf::Float64               # Free-stream velocity
+    α::Float64                  # Angle of attack
     mats::IBMatrices            # Various precomputed sparse matrices
 end
 

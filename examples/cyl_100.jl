@@ -21,15 +21,14 @@ Re = 100.0
 # Initialize motion
 Uinf = 1.0;   # Free-stream flow
 α = 0.0 * π/180.0;      # Angle of attack
-motion = ibpm.Static(Uinf, α)
 
 # Create cylinder
 r = 0.5; # Cylinder radius
-cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0, motion )]
+cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0 )]
 
-prob = ibpm.init_prob(grid, cyls, Re, Δt);
+prob = ibpm.init_prob(grid, cyls, Δt, Re, Uinf=Uinf);
 state = ibpm.init_state(prob);
-ibpm.base_flux!(state, grid, motion)  # Initialize irrotational base flux
+ibpm.base_flux!(state, prob, 0.0)  # Initialize irrotational base flux
 
 T=100.0
 timesteps = round(Int, T/Δt)
@@ -37,7 +36,7 @@ timesteps = round(Int, T/Δt)
 function run_sim(it_stop, state, prob)
     for it=1:it_stop
         t = prob.scheme.dt*it
-        ibpm.advance!(t, state, prob)
+        ibpm.advance!(state, prob, t)
         if mod(it,20) == 0
             @show (it, state.CD, state.CL, state.cfl)
             ibpm.plot_state(state, prob.model.grid; clims=(-3, 3))

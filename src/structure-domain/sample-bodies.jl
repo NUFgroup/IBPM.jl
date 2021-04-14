@@ -6,13 +6,15 @@ Support for constructing basic bodies:
 """
 
 """
-    make_plate(L, α, h, x0, y0, motion; n=0)
+    make_plate(L, α, h, x0, y0; motion=Static(), n=0)
 
 Build plate of length L at AoA α based on grid spacing of h.
 
-If n \neq 0, choose so that ds=2h
+If n \neq 0, choose so that ds=2h.  Also note that α here is different from
+the free-stream flux definition, i.e. you can either incline the plate or change
+the angle of the free-stream flow (but you probably don't want to do both)
 """
-function make_plate(L, α, h, x0, y0, motion; n=0)
+function make_plate(L, α, h, x0, y0; motion=Static(), n=0)
     # Get # of points such that ds = 2h
     if (n==0)
         n = Int( floor( L / h / 2 ) ) + 1;
@@ -31,13 +33,13 @@ function make_plate(L, α, h, x0, y0, motion; n=0)
 end
 
 """
-    make_cylinder(r, h, x0, y0, motion; n=0)
+    make_cylinder(r, h, x0, y0; motion=Static(), n=0)
 
 Build cylinder of radius r based on grid spacing of h.
 
 If n \neq 0, choose so that ds=2h.
 """
-function make_cylinder(r, h, x0, y0, motion; n=0)
+function make_cylinder(r, h, x0, y0; motion=Static(), n=0)
     circum = 2 * π * r; #  Circumference of the circle
 
     # Get # of points such that ds = 2h
@@ -59,11 +61,11 @@ function make_cylinder(r, h, x0, y0, motion; n=0)
 end
 
 """
-    make_naca(x0, N, spec, motion)
+    make_naca(x0, N, spec; motion=Static())
 
 Generate 4-digit NACA airfoil based on string `spec`.
 """
-function make_naca(x0, N, spec, motion)
+function make_naca(x0, N, spec; motion=Static())
 
     # Define x-locations
     dθ = π/(N-1)

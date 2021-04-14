@@ -33,9 +33,10 @@ initialize the simulation parameters and static matrices
 """
 function init_model(grid::T where T <: Grid,
                     bodies::Array{V, 1} where V <: Body,
-                    Re::Float64)
-    return IBModel(grid, bodies, Re, get_mats(grid, bodies, Re))
-
+                    Re::Float64,
+                    Uinf::Float64,
+                    α::Float64)
+    return IBModel(grid, bodies, Re, Uinf, α, get_mats(grid, bodies, Re))
 end
 
 
@@ -50,10 +51,12 @@ A, Ainv, B, and Binv matrices
 """
 function init_prob(grid::T where T <: Grid,
                    bodies::Array{V, 1} where V <: Body,
-                   Re::Float64,
-                   dt::Float64)
+                   dt::Float64,
+                   Re::Float64;
+                   Uinf::Float64=1.0,
+                   α::Float64=0.0)
     mats = get_mats(grid, bodies, Re)
-    model = IBModel(grid, bodies, Re, mats)
+    model = IBModel(grid, bodies, Re, Uinf, α, mats)
     scheme = AB2(dt)   # Explicit time-stepping for nonlinear terms
     A, Ainv, Binv = get_AB(model, dt)
     work = init_memory(grid)
@@ -62,9 +65,12 @@ end
 
 
 """
+    init_memory(grid)
+
 For optimal performance, pre-allocate a few vectors that can be re-used
-throughout the code
+throughout the code.
 """
+function init_memory(grid) end
 
 function init_memory(grid::UniformGrid)
     return WorkingMemory(

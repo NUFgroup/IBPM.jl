@@ -26,9 +26,11 @@ The Blasius prediction is 0.2256, but that's assuming parallel flow, i.e. no pre
 
 ### $C_L$ comparison
 
-![Lift coefficient comparison](CL.png)
+![Lift coefficient comparison](results/CL.png)
 
 ### Time benchmarks
+
+![Full solution](results/eldredge.gif)
 
 | Package      | Runtime (secs)  |
 | ----------- | ----------- | ----------- |

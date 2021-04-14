@@ -18,17 +18,16 @@ Re = 200.0
 Δt = 1e-3
 
 # Initialize motion
-Uinf(t) = [sin(t), 0.0];
-Ω(t) = 0.0;
-motion = ibpm.BodyFixed(Uinf, Ω)
+Uinf(t) = sin(t);
+motion = ibpm.BodyFixed(Uinf, t -> 0.0, t-> 0.0)
 
 # Create plate
 L = 1.0; # Plate length
-α = 90.0 * π/180.0;      # Angle of attack
+α = 90.0 * π/180.0;      # Angle of attack of plate
 x0, y0 = 0.0, 0.5
 bodies = [ibpm.make_plate( L, α, grid.h, x0, y0, motion; n=51 )]
 
-prob = ibpm.init_prob(grid, bodies, Re, Δt);
+prob = ibpm.init_prob(grid, bodies, Δt, Re);
 state = ibpm.init_state(prob);
 ibpm.base_flux!(state, prob, 0.0)  # Initialize irrotational base flux
 
@@ -44,7 +43,7 @@ function run_sim(it_stop, state, prob)
         for j=1:nplt
             it = nplt*i + j
             t = prob.scheme.dt*it
-            ibpm.advance!(t, state, prob)
+            ibpm.advance!(state, prob, t)
         end
         @show (nplt*i, state.CD, state.CL, state.cfl)
         ibpm.plot_state(state, prob.model.grid; clims=(-5, 5))

@@ -21,12 +21,12 @@ G_max = maximum(G(t))
 motion = ibpm.BodyFixed(t -> Uinf, θ, θ̇)
 
 # Create plate
-bodies = [ibpm.make_plate( L, 0.0, grid.h, x0, y0, motion; n=nb)]
-prob = ibpm.init_prob(grid, bodies, Re, Δt);
+bodies = [ibpm.make_plate( L, α, grid.h, x0, y0; motion=motion, n=nb)]
+prob = ibpm.init_prob(grid, bodies, Δt, Re, Uinf=Uinf);
 
 # Load steady boundary layer solution from plate_steady.jl
-@load "benchmarks/eldredge/steady.bson" state
-ibpm.base_flux!(state, prob, 0.0)  # Initialize base flux
+@load "benchmarks/eldredge/results/steady.bson" state
+ibpm.base_flux!(state, prob, t[1])  # Initialize base flux
 
 function plot_lift(t, F)
 	CD = @. F[:, 1]*cos(θ(t)) - F[:, 2]*sin(θ(t))
@@ -67,12 +67,12 @@ F = zeros(length(t), 2)
 #runtime = @elapsed run_sim(t, F, state, prob)
 
 # To visualize
-anim =  animated_sim(t, F, state, prob) #advance to final time
-gif(anim, "benchmarks/eldredge/eldredge.gif", fps = 30)
+#anim =  animated_sim(t, F, state, prob) #advance to final time
+#gif(anim, "benchmarks/eldredge/results/eldredge.gif", fps = 30)
 
 CD = @. F[:, 1]*cos(θ(t)) - F[:, 2]*sin(θ(t))
 CL = @. F[:, 1]*sin(θ(t)) + F[:, 2]*cos(θ(t))
-matwrite("benchmarks/eldredge/force_jl1.mat", Dict(
+matwrite("benchmarks/eldredge/results/force_jl.mat", Dict(
 	"t" => Array(t),
 	"CL" => CL,
 	"CD" => CD,

@@ -6,15 +6,13 @@ using BSON: @save, @load
 T = 100.0
 t = 0:Δt:T
 
-motion = ibpm.Static(Uinf, α)
-
 # Create plate
-bodies = [ibpm.make_plate( L, 0.0, grid.h, x0, y0, motion; n=nb)]
-prob = ibpm.init_prob(grid, bodies, Re, Δt);
+bodies = [ibpm.make_plate( L, α, grid.h, x0, y0; n=nb)]
+prob = ibpm.init_prob(grid, bodies, Δt, Re; Uinf=Uinf);
 
 #@load "benchmarks/eldredge/steady.bson" state
 state = ibpm.init_state(prob);
-ibpm.base_flux!(state, prob, 0.0)  # Initialize irrotational base flux
+ibpm.base_flux!(state, prob, t[1])  # Initialize irrotational base flux
 
 function run_sim(t, state, prob)
 	for i=1:length(t)
@@ -25,4 +23,4 @@ end
 
 run_sim(t, state, prob) #advance to final time
 
-@save "benchmarks/eldredge/steady.bson" state
+@save "benchmarks/eldredge/results/steady.bson" state
