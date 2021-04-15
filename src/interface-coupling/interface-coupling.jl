@@ -1,6 +1,5 @@
 """discrete delta function used to relate flow to structure quantities"""
-
-function delta_h( rf, rb , dr )
+function delta_h( rf, rb , dr; tol=1e-12 )
     """
     %take points on the flow domain (r) that are within the support
     %(supp) of the IB points (rb), and evaluate
@@ -25,7 +24,7 @@ function delta_h( rf, rb , dr )
     a1 = zeros(size(r1))
     a7 = zeros(size(r1))
 
-    ind = r1 .< 1.0  # Have to avoid domain errors here
+    ind = r1 .< 1.0-tol  # Have to avoid domain errors here
     a5[ind] .= @. asin((1.0/2.0)*sqrt(3.0)*(2.0*r1[ind] - 1.0));
     a8[ind] .= @. sqrt(1.0 - 12.0*r2[ind] + 12.0*r1[ind]);
 
@@ -35,7 +34,7 @@ function delta_h( rf, rb , dr )
         (-.2405626122*a5 - 0.3792313933 + 0.1012731481*a8)*r1 + 8.0187537413e-2*a5 -
         4.195601852e-2*a8 + 0.6485698427 )
 
-    ind = (r1.>1.0).*(r1.<=2.0)
+    ind = (r1.>1.0-tol).*(r1.<=2.0-tol)
     a6[ind] .= @. asin((1.0/2.0)*sqrt(3.0)*(-3.0+2.0*r1[ind]));
     a9[ind] .= @. sqrt(-23.0+36.0*r1[ind]-12.0*r2[ind]);
 
@@ -45,7 +44,7 @@ function delta_h( rf, rb , dr )
         (0.8751991178+0.3608439183*a6 -0.1548032407*a9)*r1 - 0.2806563809*a6 +
         8.22848104e-3 + 0.1150173611*a9 )
 
-    ind = (r1.>2.0).*(r1.<=3.0);
+    ind = (r1.>2.0-tol).*(r1.<=3.0-tol);
     a1[ind] .= @. asin((1.0/2.0*(2.0*r1[ind]-5.0))*sqrt(3.0))
     a7[ind] .= @. sqrt(-71.0-12.0*r2[ind]+60.0*r1[ind])
 
@@ -59,16 +58,15 @@ function delta_h( rf, rb , dr )
 end
 
 """
-Use the discrete delta function to build ET, which regularizes info from the
-    immersed surface onto the flow domain
+Return the interpolation matrix E, which interpolates flow quantities
+to the immersed boundary.  This depends on the position of the body points,
+but not their velocities
+
+The transpose of E is the regularization matrix which smears quantities
+from the IB to the flow domain.
 """
-function coupling_mat( grid::T, bodies::Array{<:Body, 1}; supp=6.0 ) where T <: Grid
+function coupling_mat( grid::T, bodies::Array{<:Body, 1}; supp=6.0, tol=1e-12 ) where T <: Grid
     """
-    Return the regularization matrix E' (scaled to be the transpose of E),
-    which takes quantities on the IB and smears them to the flow domain.
-    NOTE: E should only be precomputed for Static motions!
-    E is the interpolation matrix, which goes from the flow domain to the IB
-        This depends on the position of the body points, but not their velocities
     200 x 200 grid
     Original:
         99.829 ms (19585 allocations: 116.02 MiB)
@@ -116,23 +114,21 @@ function coupling_mat( grid::T, bodies::Array{<:Body, 1}; supp=6.0 ) where T <: 
         #--rows corresponding to x-vels
         for j = 1:nb[i]
             # Find x-points of fluid domain within support
-            ind_x =  findall( abs.( xu .- xb_x[j] ) .<= supp * del )
+            ind_x =  findall( abs.( xu .- xb_x[j] ) .<= (supp + tol) * del )
 
             # Find y-points within support
-            ind_y = findall( abs.( yu .- xb_y[j] ) .<= supp * del )
+            ind_y = findall( abs.( yu .- xb_y[j] ) .<= (supp + tol) * del )
 
             # rows of ET to add to (first grid level)
             velx_ind = (m-1).*(ind_y' .- 1) .+ ind_x
 
             # entries to put into columns
-            del_h = delta_h( xu[ind_x], xb_x[j], del) .*
-                    delta_h( yu[ind_y], xb_y[j], del)'
+            del_h = delta_h( xu[ind_x], xb_x[j], del; tol=tol) .*
+                    delta_h( yu[ind_y], xb_y[j], del; tol=tol)'
 
             colptr[tally+j+1] = colptr[tally+j] + length(velx_ind)
             rowval = [rowval; velx_ind[:]]
             nzval = [nzval; del_h[:]]
-
-            # E[tally+j, velx_ind[:]] .+= del_h[:];  # without direct CSC construction
         end
 
         tally += nb[i];
@@ -141,23 +137,21 @@ function coupling_mat( grid::T, bodies::Array{<:Body, 1}; supp=6.0 ) where T <: 
         for j = 1:nb[i]
 
             # Find x-points of fluid domain within support
-            ind_x =  findall( abs.( xv .- xb_x[j] ) .<= supp * del )
+            ind_x =  findall( abs.( xv .- xb_x[j] ) .<= (supp + tol) * del )
 
             # Find y-points within support
-            ind_y = findall( abs.( yv .- xb_y[j] ) .<= supp * del )
+            ind_y = findall( abs.( yv .- xb_y[j] ) .<= (supp + tol) * del )
 
             # rows of ET to add to
             vely_ind = n_add .+ m .* (ind_y' .- 1) .+ ind_x
 
             # entries to put into columns
-            del_h = delta_h( xv[ind_x], xb_x[j], del) .*
-                    delta_h( yv[ind_y], xb_y[j], del)'
+            del_h = delta_h( xv[ind_x], xb_x[j], del; tol=tol) .*
+                    delta_h( yv[ind_y], xb_y[j], del; tol=tol)'
 
             colptr[tally+j+1] = colptr[tally+j] + length(vely_ind)
             rowval = [rowval; vely_ind[:]]
             nzval = [nzval; del_h[:]]
-
-            # E[tally+j, vely_ind[:]] .+= del_h[:];  # without direct CSC construction
         end
 
         #Keep a tally of columns we've used to now

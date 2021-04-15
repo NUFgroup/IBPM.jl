@@ -210,7 +210,13 @@ function get_Ainv(model::IBModel{<:Grid, <:Body}, dt::Float64;
 end
 
 
-
+"""
+Compute the matrix (as a LinearMap) that represents the modified Poisson
+operator (I + dt/2 * Beta * RC) arising from the implicit treatment of the
+Laplacian. A system involving this matrix is solved to compute a trial
+circulation that doesn't satisfy the BCs, and then again to use the surface
+stresses to update the trial circulation so that it satisfies the BCs
+"""
 function get_A(model::IBModel{UniformGrid, <:Body}, dt::Float64)
     A = I - (dt/2 / (model.grid.h^2))*model.mats.Lap
     Ainv = get_Ainv(model, dt)
@@ -224,7 +230,7 @@ function get_A(model::IBModel{MultiGrid, <:Body}, dt::Float64)
     return A, Ainv
 end
 
-function get_B(model::IBModel{UniformGrid, RigidBody{Static}}, Ainv::LinearMap)
+function get_B(model::IBModel{UniformGrid, RigidBody{T}} where T <: Motion, Ainv::LinearMap)
     """
     Precompute 'B' matrix by evaluating mat-vec products for unit vectors
 
@@ -258,7 +264,7 @@ function get_B(model::IBModel{UniformGrid, RigidBody{Static}}, Ainv::LinearMap)
     return Binv
 end
 
-function get_B(model::IBModel{MultiGrid, RigidBody{Static}}, Ainv)
+function get_B(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion, Ainv)
     """
     MultiGrid version:
     Precompute 'B' matrix by evaluating mat-vec products for unit vectors
@@ -295,7 +301,7 @@ function get_B(model::IBModel{MultiGrid, RigidBody{Static}}, Ainv)
 end
 
 
-function get_B(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion, Ainv)
+function get_B(model::IBModel{MultiGrid, RigidBody{MotionFunction}}, Ainv)
     """
     For more general motions
         Create a linear map with mat-vec product and solve system with
@@ -322,8 +328,6 @@ function get_B(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion, Ainv)
 
     return Binv
 end
-
-
 
 function B_times!(x::Array{Float64, 2},
                   z::Array{Float64, 2},

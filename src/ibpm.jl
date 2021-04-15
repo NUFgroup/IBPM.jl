@@ -9,17 +9,22 @@ using IterativeSolvers
 export IBPM_advance
 
 #Caution, include order matters!
-include("pre-processing/pre-processing-include.jl")
 include("fluid-domain/fluid-domain-include.jl")
 include("structure-domain/structure-domain-include.jl")
+include("pre-processing/pre-processing-include.jl")
 include("fluid-operators/fluid-operators-include.jl")
 include("interface-coupling/interface-coupling-include.jl")
 include("plotting/plotting-include.jl")
 include("timestepping/timestepping-include.jl")
 
+"""
+Convenience function to solve the full problem and plot final solution
+    for flow over a single cylinder
+
+For more control, just use this as a template - see benchmarks and examples
+"""
 function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     Uinf=1.0, α=0.0, T=20.0*dt, plot=false)
-
     # MultiGrid
     grid = make_grid(nx, ny, offx, offy, len, mg=mg)
 
@@ -31,13 +36,12 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     elseif body.motion == "rot_cyl"
         motion=RotatingCyl(body.θ̇)
     end
-    cyls = [make_cylinder( r, grid.h, 0.0, 0.0, motion )]
+    cyls = [make_cylinder( r, grid.h, 0.0, 0.0; motion=motion )]
 
-    prob = init_prob(grid, cyls, Re, Δt);
-    state = init_state(prob);
+    prob = IBProblem(grid, cyls, Δt, Re, Uinf=Uinf, α=α);
 
-    base_flux!(state, grid, Uinf, α)  # Initialize irrotational base flux
-
+    state = IBState(prob);
+    
     timesteps = round(Int, T/Δt)
 
     run_sim(1, state, prob) #pre-compute stationary IB matrix before advancing
@@ -56,7 +60,8 @@ end
 function run_sim(it_stop, state, prob)
     for it=1:it_stop
         t = prob.scheme.dt*it
-        advance!(t, state, prob)
+    	advance!(state, prob, t)
+        @show (it, state.CD, state.CL, state.cfl)
         if mod(it,20) == 0
             @show (it, state.CD, state.CL, state.cfl)
         end
