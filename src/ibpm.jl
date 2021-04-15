@@ -41,9 +41,7 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     prob = IBProblem(grid, cyls, Δt, Re, Uinf=Uinf, α=α);
 
     state = IBState(prob);
-
-    base_flux!(state, prob, 0.0)  # Initialize irrotational base flux
-
+    
     timesteps = round(Int, T/Δt)
 
     run_sim(1, state, prob) #pre-compute stationary IB matrix before advancing

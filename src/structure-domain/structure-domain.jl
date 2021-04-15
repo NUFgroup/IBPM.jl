@@ -12,7 +12,6 @@ function MotionType( bodies::Array{V, 1} where V<:Body )
     end
 end
 
-
 function get_body_info( bodies::Array{V, 1} where V <: Body )
     # determine the num of body points per body
     nf = [length(bodies[j].xb) for j=1:length(bodies)]

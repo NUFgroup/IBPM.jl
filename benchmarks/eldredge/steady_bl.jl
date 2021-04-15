@@ -12,7 +12,6 @@ prob = ibpm.IBProblem(grid, bodies, Δt, Re; Uinf=Uinf);
 
 #@load "benchmarks/eldredge/steady.bson" state
 state = ibpm.IBState(prob);
-ibpm.base_flux!(state, prob, t[1])  # Initialize irrotational base flux
 
 function run_sim(t, state, prob)
 	for i=1:length(t)

@@ -26,7 +26,6 @@ prob = ibpm.IBProblem(grid, bodies, Δt, Re, Uinf=Uinf);
 
 # Load steady boundary layer solution from plate_steady.jl
 @load "benchmarks/eldredge/results/steady.bson" state
-ibpm.base_flux!(state, prob, t[1])  # Initialize base flux
 
 function plot_lift(t, F)
 	CD = @. F[:, 1]*cos(θ(t)) - F[:, 2]*sin(θ(t))

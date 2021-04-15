@@ -29,7 +29,6 @@ bodies = [ibpm.make_plate( L, α, grid.h, x0, y0, motion; n=51 )]
 
 prob = ibpm.IBProblem(grid, bodies, Δt, Re);
 state = ibpm.IBstate(prob);
-ibpm.base_flux!(state, prob, 0.0)  # Initialize irrotational base flux
 
 T=2.0*2π
 timesteps = round(Int, T/Δt)

@@ -28,7 +28,6 @@ cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0 )]
 
 prob = ibpm.IBProblem(grid, cyls, Δt, Re, Uinf=Uinf);
 state = ibpm.IBState(prob);
-ibpm.base_flux!(state, prob, 0.0)  # Initialize irrotational base flux
 
 T=100.0
 timesteps = round(Int, T/Δt)

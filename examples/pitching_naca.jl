@@ -32,7 +32,6 @@ bodies = [ibpm.make_naca(x0, nb, spec, motion=motion)]
 
 prob = ibpm.IBProblem(grid, bodies, Δt, Re);
 state = ibpm.IBstate(prob);
-ibpm.base_flux!(state, prob, 0.0)  # Initialize base flux
 
 T=2.0*(2π/ω)
 timesteps = round(Int, T/Δt)

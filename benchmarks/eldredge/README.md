@@ -6,6 +6,8 @@ changed to quarter chord.
 
 ![Pitch maneuver](AoA_traj.png)
 
+![Full solution](results/eldredge.gif)
+
 There are four relevant scripts here:
 
 1. `config.jl` - Initialize shared variables (to make sure all scripts will use the same grid and body definitions)
@@ -20,7 +22,7 @@ The Blasius prediction is 0.2256, but that's assuming parallel flow, i.e. no pre
 
 | Package      |  $C_D$ |
 | ----------- |  -----|
-| Julia | 0.3987   |
+| Julia | 0.3973   |
 | Fortran | 0.3942 |
 | C++ | 0.3828 |
 | Matlab |  0.3973  |  <== SHOULD MATCH JULIA EXACTLY!!!
@@ -31,13 +33,14 @@ The Blasius prediction is 0.2256, but that's assuming parallel flow, i.e. no pre
 
 ### Time benchmarks
 
-![Full solution](results/eldredge.gif)
-
 | Package      | Runtime (secs)  |
-| ----------- | ----------- | ----------- |
+| ----------- | ----------- |
 | C++ (lab frame)  |  28045   |
 | C++ (body-fixed)  |    1759 |
 | Fortran | 1601  |
-| Julia    |  1213  |
+| Julia    |  1098  |
 
 30% speedup over C++ and 25% over Fortran!
+
+
+**In-place ops on base_flux!
