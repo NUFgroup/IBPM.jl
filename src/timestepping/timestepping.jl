@@ -202,46 +202,6 @@ function base_flux!(::Type{MovingGrid},
 end
 
 """
-#TODO: DO THIS WITHOUT circ2_st_vflx (DIRECT CROSS PRODUCT)
-function base_flux!(::Type{MovingGrid},
-                    state::IBState{MultiGrid},
-                    prob::IBProblem,
-                    t::Float64)
-    grid = prob.model.grid
-    motion = prob.model.bodies[1].motion
-    nu = grid.ny*(grid.nx-1);  # Number of x-flux points
-
-    # Alias working memory
-    ψ0 = prob.work.Γ1;
-    Γ0 = prob.work.Γ2;
-
-    ### Rotational part
-    # Get flux from curl of solid-body rotation
-    #  Note factor of 2 from angular velocity -> vorticity
-    Ω = -motion.θ̇(t)
-    α = -motion.θ(t)
-
-    for lev=1:grid.mg
-        hc = grid.h * 2^( lev - 1 );  # Coarse grid spacing
-        Γ0[:, lev] .= 2*hc^2*Ω
-    end
-
-    circ2_st_vflx!(ψ0, state.q0, Γ0, prob.model, grid.mg)
-
-    ### Potential flow part (note θ = -α for angle of attack)
-    Ux0 = motion.U(t)*cos(α)
-    Uy0 = motion.U(t)*sin(α)
-    for lev = 1 : grid.mg
-        # Coarse grid spacing
-        hc = grid.h * 2^( lev - 1 );
-
-        ### Potential flow part
-        state.q0[1:nu, lev] .+= hc*Ux0          # x-flux
-        state.q0[nu+1:grid.nq, lev] .+= hc*Uy0  # y-velocity
-    end
-end"""
-
-"""
     get_trial_state!(qs, Γs, state, prob)
 
 Compute trial circulation Γs that doesn't satisfy no-slip BCs

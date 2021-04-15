@@ -1,4 +1,18 @@
 
+function MotionType( body::V where V<:Body )
+    return typeof(body.motion)
+end
+
+function MotionType( bodies::Array{V, 1} where V<:Body )
+    motions = [typeof(bodies[i].motion) for i=1:length(bodies)]
+    if all(motions .== motions[1])
+        return motions[1]
+    else
+        return Motion
+    end
+end
+
+
 function get_body_info( bodies::Array{V, 1} where V <: Body )
     # determine the num of body points per body
     nf = [length(bodies[j].xb) for j=1:length(bodies)]
