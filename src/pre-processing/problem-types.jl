@@ -102,8 +102,8 @@ function base_flux!(::Type{T} where T <: InertialMotion,
     Uinf, α = prob.model.Uinf, prob.model.α
     m = grid.nx;
     n = grid.ny;
-    state.q0[ 1:(m-1)*n ] .= Uinf * grid.h * cos(α);  # x-flux
-    state.q0[ (m-1)*n+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
+    state.q0[ 1:(m+1)*n ] .= Uinf * grid.h * cos(α);  # x-flux
+    state.q0[ (m+1)*n+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
 end
 
 "Initialize irrotational freestream flux when not time-varying"

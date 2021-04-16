@@ -11,11 +11,12 @@ export IBPM_advance
 #Caution, include order matters!
 include("fluid-domain/fluid-domain-include.jl")
 include("structure-domain/structure-domain-include.jl")
-include("pre-processing/pre-processing-include.jl")
+include("interface-coupling/interface-coupling-include.jl")
 include("fluid-operators/fluid-operators-include.jl")
+"""include("pre-processing/pre-processing-include.jl")
 include("interface-coupling/interface-coupling-include.jl")
 include("plotting/plotting-include.jl")
-include("timestepping/timestepping-include.jl")
+include("timestepping/timestepping-include.jl")"""
 
 """
 Convenience function to solve the full problem and plot final solution
@@ -41,7 +42,7 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     prob = IBProblem(grid, cyls, Δt, Re, Uinf=Uinf, α=α);
 
     state = IBState(prob);
-    
+
     timesteps = round(Int, T/Δt)
 
     run_sim(1, state, prob) #pre-compute stationary IB matrix before advancing

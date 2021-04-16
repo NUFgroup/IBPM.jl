@@ -263,49 +263,47 @@ function get_Q( grid::T ) where T <: Grid
     %Note: The Q used in the timestepping protocol postmultiplies
     %Minv to the Q obtained here.
 
-    %Inputs: grid_parms -- data structure containing m (number of points in x
-    %dirn), n (number of points in y dirn), and mg (number of grid levels)
+    %Inputs: grid_parms -- data structure containing nx (number of points in x
+    %dirn), ny (number of points in y dirn), and mg (number of grid levels)
 
     """
+    nx = grid.nx; ny = grid.ny;
 
-    m = grid.nx;
-    n = grid.ny;
-
-    nrows = get_velx_ind( m-1, n, grid ) +
-            get_vely_ind( m, n-1, grid ) ;
+    nrows = get_velx_ind( nx+1, ny, grid ) +
+            get_vely_ind( nx, ny+1, grid ) ;
     ncols = nrows ;
     Q = spzeros(nrows, ncols)  # Initialize
 
 
     # y-velocity index starts at the end of all x-velocities
-    n_add = get_velx_ind( m-1, n, grid );
+    n_add = get_velx_ind( nx+1, ny, grid );
 
     #--Block corresponding to x-velocities
 
     # y-vels to bottom left of current x-vel point
-    velx_ind = get_velx_ind(x1_ind(m, n), y2_ind(m, n), grid);
-    vely_ind = get_vely_ind(x1_ind(m, n), y1_ind(m, n), grid);
+    velx_ind = get_velx_ind(x1_ind(nx, ny), y2_ind(nx, ny), grid);
+    vely_ind = get_vely_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
 
     Q .-= 0.25*sparse( velx_ind, n_add .+ vely_ind,
             ones(size(vely_ind)), nrows, ncols);
 
     # y-vels to bottom right of current x-vel point
-    velx_ind = get_velx_ind(x1_ind(m, n), y2_ind(m, n), grid);
-    vely_ind = get_vely_ind(x2_ind(m, n), y1_ind(m, n), grid);
+    velx_ind = get_velx_ind(x1_ind(nx, ny), y2_ind(nx, ny), grid);
+    vely_ind = get_vely_ind(x2_ind(nx, ny), y1_ind(nx, ny), grid);
 
     Q .-= 0.25*sparse( velx_ind, n_add .+ vely_ind,
             ones(size(vely_ind)), nrows, ncols);
 
     # y-vels to top left of current x-vel point
-    velx_ind = get_velx_ind(x1_ind(m, n), y1_ind(m, n), grid);
-    vely_ind = get_vely_ind(x1_ind(m, n), y1_ind(m, n), grid);
+    velx_ind = get_velx_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
+    vely_ind = get_vely_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
 
     Q .-= 0.25*sparse( velx_ind, n_add .+ vely_ind,
             ones(size(vely_ind)), nrows, ncols);
 
     #y-vels to top right of current x-vel point
-    velx_ind = get_velx_ind(x1_ind(m, n), y1_ind(m, n), grid);
-    vely_ind = get_vely_ind(x2_ind(m, n), y1_ind(m, n), grid);
+    velx_ind = get_velx_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
+    vely_ind = get_vely_ind(x2_ind(nx, ny), y1_ind(nx, ny), grid);
 
     Q .-= 0.25*sparse( velx_ind, n_add .+ vely_ind,
             ones(size(vely_ind)), nrows, ncols);
@@ -314,29 +312,29 @@ function get_Q( grid::T ) where T <: Grid
     #--Block corresponding to y-velocities
 
     # x-vels to bottom left of current y-vel point
-    vely_ind = get_vely_ind(x2_ind(m, n), y1_ind(m, n), grid);
-    velx_ind = get_velx_ind(x1_ind(m, n), y1_ind(m, n), grid);
+    vely_ind = get_vely_ind(x2_ind(nx, ny), y1_ind(nx, ny), grid);
+    velx_ind = get_velx_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
 
     Q .+= 0.25*sparse( n_add .+ vely_ind, velx_ind,
         ones(size(vely_ind)), nrows, ncols);
 
     # x-vels to bottom right of current y-vel point
-    vely_ind = get_vely_ind(x1_ind(m, n), y1_ind(m, n), grid);
-    velx_ind = get_velx_ind(x1_ind(m, n), y1_ind(m, n), grid);
+    vely_ind = get_vely_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
+    velx_ind = get_velx_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
 
     Q .+= 0.25*sparse( n_add .+ vely_ind, velx_ind,
         ones(size(vely_ind)), nrows, ncols);
 
     # x-vels to top left of current y-vel point
-    vely_ind = get_vely_ind(x2_ind(m, n), y1_ind(m, n), grid);
-    velx_ind = get_velx_ind(x1_ind(m, n), y2_ind(m, n), grid);
+    vely_ind = get_vely_ind(x2_ind(nx, ny), y1_ind(nx, ny), grid);
+    velx_ind = get_velx_ind(x1_ind(nx, ny), y2_ind(nx, ny), grid);
 
     Q .+= 0.25*sparse( n_add .+ vely_ind, velx_ind,
         ones(size(vely_ind)), nrows, ncols);
 
     # x-vels to top right of current y-vel point
-    vely_ind = get_vely_ind(x1_ind(m, n), y1_ind(m, n), grid);
-    velx_ind = get_velx_ind(x1_ind(m, n), y2_ind(m, n), grid);
+    vely_ind = get_vely_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
+    velx_ind = get_velx_ind(x1_ind(nx, ny), y2_ind(nx, ny), grid);
 
     Q .+= 0.25*sparse( n_add .+ vely_ind, velx_ind,
         ones(size(vely_ind)), nrows, ncols);
@@ -359,45 +357,42 @@ function get_W( grid::T ) where T <: Grid
     %Inputs: grid_parms -- data structure containing m (number of points in x
     %dirn), n (number of points in y dirn), and mg (number of grid levels)
     """
+    nx = grid.nx; ny = grid.ny;
 
-    m = grid.nx;
-    n = grid.ny;
-
-    nrows = get_velx_ind( m-1, n, grid ) +
-            get_vely_ind( m, n-1, grid ) ;
-    ncols = get_vort_ind( m-1, n-1, grid ) ;
+    nrows = get_velx_ind( nx+1, ny, grid ) +
+            get_vely_ind( nx, ny+1, grid ) ;
+    ncols = get_vort_ind( nx-1, ny-1, grid ) ;
     W = spzeros(nrows, ncols)  # Initialize
 
     # y-velocity index starts at the end of all x-velocities
-    n_add = get_velx_ind( m-1, n, grid );
+    n_add = get_velx_ind( nx+1, ny, grid );
 
     #-- x-vel block
     # vorticity points above x-velocity point
-    velx_ind = get_velx_ind(x1_ind(m, n), y1_ind(m, n), grid);
-    vort_ind = get_vort_ind(x1_ind(m, n), y1_ind(m, n), grid);
+    velx_ind = get_velx_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
+    vort_ind = get_vort_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
 
     W .+= 0.5*sparse( velx_ind, vort_ind,
         ones(size(vort_ind)), nrows, ncols);
 
     # vorticity points below x-velocity point
-    velx_ind = get_velx_ind(x1_ind(m, n), y2_ind(m, n), grid);
-    vort_ind = get_vort_ind(x1_ind(m, n), y1_ind(m, n), grid);
+    velx_ind = get_velx_ind(x1_ind(nx, ny), y2_ind(nx, ny), grid);
+    vort_ind = get_vort_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
 
     W .+= 0.5*sparse( velx_ind, vort_ind,
         ones(size(vort_ind)), nrows, ncols);
 
-
     #-- y-vel block
     #vorticity points to the right of y-velocity point
-    vely_ind = get_vely_ind(x1_ind(m, n), y1_ind(m, n), grid);
-    vort_ind = get_vort_ind(x1_ind(m, n), y1_ind(m, n), grid);
+    vely_ind = get_vely_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
+    vort_ind = get_vort_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
 
     W .+= 0.5*sparse( n_add .+ vely_ind, vort_ind,
         ones(size(vort_ind)), nrows, ncols);
 
     #vorticity points to the left of y-velocity point
-    vely_ind = get_vely_ind(x2_ind(m, n), y1_ind(m, n), grid);
-    vort_ind = get_vort_ind(x1_ind(m, n), y1_ind(m, n), grid);
+    vely_ind = get_vely_ind(x2_ind(nx, ny), y1_ind(nx, ny), grid);
+    vort_ind = get_vort_ind(x1_ind(nx, ny), y1_ind(nx, ny), grid);
 
     W .+= 0.5*sparse( n_add .+ vely_ind, vort_ind,
         ones(size(vort_ind)), nrows, ncols);

@@ -224,7 +224,14 @@ function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
     qwork = @view(prob.work.q2[:, 1])
     broadcast!(+, qwork, qs, q0)                     # qs + q0
     mul!(F̃b, E, qwork)                               # E*(qs .+ state.q0)... using fb here as working array
-    F̃b .= (1/h)*prob.Binv*F̃b                         # Allocates a small amount of memory
+
+    println(sum(qs.^2))
+    println(sum(F̃b.^2))
+
+    #F̃b .= (1/h)*prob.Binv*F̃b                         # Allocates a small amount of memory
+    F̃b .= (1/h)*(prob.Binv\F̃b)  # NOTE RIGHT NOW prob.Binv is cholesky(B)... so still has to be inverted
+
+    println(sum(F̃b.^2))
 end
 
 """
