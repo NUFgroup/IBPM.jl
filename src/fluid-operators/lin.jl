@@ -12,6 +12,7 @@ Transpose of discrete curl (R matrix)
 """
 function rot( q, grid )
     Γ = zeros(grid.nΓ)
+    #Γ = zeros(grid.nx-1, grid.ny-1)
     for j=1:grid.ny-1
         for i=1:grid.nx-1
             Γ[grid.ω(i, j)] = q[grid.v(i+1, j+1)] - q[grid.v(i, j+1)] - q[grid.u(i+1, j+1)] + q[grid.u(i+1, j)]
@@ -31,27 +32,23 @@ function curl!( q, ψ, grid )
    nx, ny = grid.nx, grid.ny
    for j=2:ny-1
       for i=2:nx-1
-         q[grid.u(i, j)] = ψ[grid.ω(i, j+1)] - ψ[grid.ω(i, j)]
+         q[grid.u(i, j)] = ψ[grid.ω(i-1, j)] - ψ[grid.ω(i-1, j-1)]
       end
    end
 
-   for i=1:nx
-      j=1
-      q[grid.u(i, j)] = ψ[grid.ω(i, j+1)]
-      j=ny
-      q[grid.u(i, j)] = ψ[grid.ω(i, j)]
+   for i=2:nx
+      q[grid.u(i, 1)] = ψ[grid.ω(i-1, 1)]
+      q[grid.u(i, ny)] = ψ[grid.ω(i-1, ny-1)]
    end
 
    for j=2:ny
-       i=1
-       q[grid.v(i,j)] = - ψ[grid.ω(i+1, j)]
+       q[grid.v(1,j)] = -ψ[grid.ω(1, j-1)]
        for i=2:nx-1
-          q[grid.v(i,j)] = ψ[grid.ω(i,j)] - ψ[grid.ω(i+1,j)]
-      end
-       i=nx
-       q[grid.v(i,j)] = ψ[grid.ω(i,j)]
-   end
-   return q
+           q[grid.v(i,j)] = ψ[grid.ω(i-1,j-1)] - ψ[grid.ω(i,j-1)]
+       end
+       q[grid.v(nx,j)] = ψ[grid.ω(nx-1,j-1)]
+    end
+    return q
 end
 
 """
@@ -70,10 +67,9 @@ Both of these systems can be solved efficiently (on uniform grids or nested
 function Lap_eigs( grid::T ) where T <: Grid
     # eigenvalues of RC (negative of the evals of the 5point stencil Lap)
     nx = grid.nx; ny = grid.ny;
-    Λ = -2*( cos.( π*(1:(ny-1))/ny ) .+ cos.( π*(1:(nx-1))/nx )' .- 2);
+    Λ = -2*( cos.( π*(1:(nx-1))/nx ) .+ cos.( π*(1:(ny-1))/ny )' .- 2);
     return Λ
 end
-
 
 function Λinv_fn!(x::AbstractArray,
                   b::AbstractArray,
@@ -88,9 +84,9 @@ function Λinv_fn!(x::AbstractArray,
     # reshape for inversion in fourier space
     b = reshape( b, nx-1, ny-1)
     x = reshape( x, nx-1, ny-1)
-    dst_inv!(x, b, Λ, dst_plan);
+    dst_inv!(x, b, Λ, dst_plan; scale=1/(4*nx*ny));
     # Include scale to make fwd/inv transforms equal
-    rmul!(x, 4.0/( nx*ny ))
+    #rmul!(x, 4.0/( nx*ny ))
     x = reshape( x, (nx-1)*(ny-1), 1 )
 end
 

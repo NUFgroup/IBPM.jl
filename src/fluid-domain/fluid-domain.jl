@@ -30,7 +30,7 @@ function make_grid(nx::Int, ny::Int, offx::Float64, offy::Float64, len::Float64;
     if mg==1
         u(i, j) = (nx+1)*(j-1) + i
         v(i, j) = nu + nx*(j-1) + i
-        ω(i, j) = (ny-1)*(j-1) + i
+        ω(i, j) = (nx-1)*(j-1) + i
         return UniformGrid(nx, ny, nΓ, nq, offx, offy, len, h, u, v, ω)
     end
 end

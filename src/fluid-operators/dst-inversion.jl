@@ -4,12 +4,12 @@ using LinearAlgebra
 # Shorthand for discrete sine transform
 function dst(b)
     #return FFTW.r2r(b, FFTW.RODFT10, 2)
-    return 0.25*FFTW.r2r(b, FFTW.RODFT00, [1, 2])
+    return FFTW.r2r(b, FFTW.RODFT00, [1, 2])
 end
 
 function get_dst_plan(b)
     # Generate plans needed for optimized DST inversion
-    p = 0.25*FFTW.plan_r2r(b, FFTW.RODFT00, [1, 2])
+    p = FFTW.plan_r2r(b, FFTW.RODFT00, [1, 2]; flags=FFTW.EXHAUSTIVE)
 
     # Preallocated work array
     w = zeros(size(b))
@@ -36,7 +36,7 @@ function dst_inv(b, Λ, dst_plan)
     return p * ( (p * b) ./ Λ' )
 end
 
-function dst_inv!(x, b, Λ, dst_plan)
+function dst_inv!(x, b, Λ, dst_plan; scale=1.0)
     """
     Optimized DST inversion with pre-allocated arrays
     """
@@ -44,6 +44,7 @@ function dst_inv!(x, b, Λ, dst_plan)
     # w - work array (preallocated memory)
     p, w = dst_plan
     mul!(w, p, b)  # dst(b)
-    w ./= transpose(Λ);
+    w ./= Λ;
+    w .*= scale;
     mul!(x, p, w)  # dst( (dst(b) ./ Λ') )
 end
