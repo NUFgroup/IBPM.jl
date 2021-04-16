@@ -225,6 +225,7 @@ function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
     broadcast!(+, qwork, qs, q0)                     # qs + q0
     mul!(F̃b, E, qwork)                               # E*(qs .+ state.q0)... using fb here as working array
     F̃b .= (1/h)*prob.Binv*F̃b                         # Allocates a small amount of memory
+    #F̃b .= (1/h)*(prob.Binv\F̃b)                      # USE WITH CHOLESKY
 end
 
 """

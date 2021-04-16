@@ -15,6 +15,6 @@ Re = 40.0
 Uinf = 1.0;   # Free-stream flow
 r = 0.5; # Cylinder radius
 body = (type="cylinder", lengthscale=r, motion="static")
-T = 10
+T = 100
 runtime = ibpm.IBPM_advance( Re, nx,ny, offx, offy, len,
     mg=mg, body=body, Δt=Δt, Uinf=Uinf, T=T, plot=false )

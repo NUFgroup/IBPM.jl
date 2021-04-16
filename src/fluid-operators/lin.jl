@@ -241,9 +241,11 @@ function get_B(model::IBModel{UniformGrid, RigidBody{T}} where T <: Motion, Ainv
     nftot = sum(nf)
 
     # need to build and store surface stress matrix and its inverse if at first time step
+    #B_op = model.mats.RET' * model.mats.RCinv * model.mats.RET
     B = zeros( nftot, nftot );
     # Pre-allocate arrays
     e = zeros( nftot, 1 );         # Unit vector
+
 
     # TODO: Alternative... could create a dummy state to operate on here
     b = zeros( nftot, 1 );         # Working array
@@ -260,8 +262,9 @@ function get_B(model::IBModel{UniformGrid, RigidBody{T}} where T <: Motion, Ainv
         B_times!( b, e, Ainv, model, Γ, ψ, q );
         B[:, j] = b
     end
-    Binv = inv(B)
-    return Binv
+    #return inv(B)
+    #println(norm(0.5*(B - B')))
+    #return cholesky(0.5*(B + B'))
 end
 
 function get_B(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion, Ainv)
@@ -296,8 +299,9 @@ function get_B(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion, Ainv)
         B_times!( b, e, Ainv[1], model, Γ, ψ, q );
         B[:, j] = b
     end
-    Binv = inv(B)
-    return Binv
+    return inv(B)
+    #println(norm(0.5*(B - B')))
+    #return cholesky(0.5*(B + B'))
 end
 
 
