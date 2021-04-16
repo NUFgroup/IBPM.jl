@@ -66,22 +66,18 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
     del = grid.h;  # Size of uniform grid cell
     d2 = del/2
 
-    xb = bodies[1].xb
+    # Stack all body points together... don't need to distinguish them here
+    xb = vcat( [body.xb for body in bodies]...)
+    nb = size(xb, 1)
+    nf = 2*nb
 
-    # Get size of ET
-    # Also need later: y index starts after all the x-vels
-    nb, nf = get_body_info(bodies)
-    ncols = sum(nf);
-
-    nf, nb = nf[1], nb[1]
-
-    weight = zeros( (2*supp + 1)^2, nf )
-    indexx = zeros(Int64, nf )
+    weight = zeros( nf, (2*supp + 1)^2 )
+    indexx = zeros(Int64, nb, 2 )
 
     # Nearest indices of body relative to grid
     for i=1:nb
-        indexx[i] = Int(round( (xb[i, 1]+grid.offx)/del ))
-        indexx[i+nb] = Int(round( (xb[i, 2]+grid.offy)/del ))
+        indexx[i, 1] = Int(round( (xb[i, 1]+grid.offx)/del ))
+        indexx[i, 2] = Int(round( (xb[i, 2]+grid.offy)/del ))
     end
 
     # get regularized weight near ib points (u-vel points)
@@ -89,69 +85,53 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
         next=0
         for l=-supp:supp
             for k=-supp:supp
-                x = del*(indexx[i]-1+k)-grid.offx       # grid location x
-                y = del*(indexx[i+nb]-1+l)-grid.offy+d2 # grid location y
+                x = del*(indexx[i, 1]-1+k)-grid.offx       # grid location x
+                y = del*(indexx[i, 2]-1+l)-grid.offy+d2 # grid location y
                 next += 1
-                weight[next,i] = delta_h(x, xb[i, 1], del) *
+                weight[i, next] = delta_h(x, xb[i, 1], del) *
                                  delta_h(y, xb[i, 2], del)
 
-                x = del*(indexx[i]-1+k)-grid.offx+d2  # grid location x
-                y = del*(indexx[i+nb]-1+l)-grid.offy # grid location y
-                weight[next,i+nb] = delta_h(x, xb[i, 1], del) *
+                x = del*(indexx[i, 1]-1+k)-grid.offx+d2  # grid location x
+                y = del*(indexx[i, 2]-1+l)-grid.offy # grid location y
+                weight[i+nb,next] = delta_h(x, xb[i, 1], del) *
                                     delta_h(y, xb[i, 2], del)
             end
         end
     end
 
-    reg  = fb -> reg_fn(fb, weight, indexx, grid)
-    regT =  q -> regT_fn(q, weight, indexx, grid)
-    return reg, regT
-end
-
-"""
-Generate the function that acts like E^T (regularization of body force)
-"""
-function reg_fn(fb, weight, indexx, grid; supp=6)
-    q = zeros(grid.nq)
-    nb = length(indexx) ÷ 2
-
-    for k=1:nb
-        i = indexx[k]
-        j = indexx[k+nb]
-        next = 0
-        for l=-supp:supp
-            for p=-supp:supp
-                next += 1
-                q[grid.u(i+p,j+l)] += weight[next,k]*fb[k]
-                q[grid.v(i+p,j+l)] += weight[next,k+nb]*fb[k+nb]
+    function reg!(q, fb)
+        #q = zeros(grid.nq)
+        q .*= 0.0
+        for k=1:nb
+            i = indexx[k, 1]
+            j = indexx[k, 2]
+            next = 0
+            for l=-supp:supp
+                for p=-supp:supp
+                    next += 1
+                    q[grid.u_idx(i+p,j+l)] += weight[k,next]*fb[k]
+                    q[grid.v_idx(i+p,j+l)] += weight[k+nb,next]*fb[k+nb]
+                end
             end
         end
     end
 
-    return q
-end
-
-
-
-"""
-Generate the function that acts like E (interpolation to body)
-"""
-function regT_fn(q, weight, indexx, grid; supp=6)
-    fb = zeros(size(weight, 2))
-    nb = length(indexx) ÷ 2
-
-    for k=1:nb
-        i = indexx[k]
-        j = indexx[k+nb]
-        next = 0
-        for l=-supp:supp
-            for p=-supp:supp
-                next += 1
-                fb[k] += weight[next, k]*q[ grid.u(i+p,j+l) ]
-                fb[k+nb] += weight[next, k+nb]*q[ grid.v(i+p,j+l) ]
+    function regT!(fb, q)
+        fb .*= 0.0
+        for k=1:nb
+            i = indexx[k]
+            j = indexx[k+nb]
+            next = 0
+            for l=-supp:supp
+                for p=-supp:supp
+                    next += 1
+                    fb[k] += weight[k,next]*q[ grid.u_idx(i+p,j+l) ]
+                    fb[k+nb] += weight[k+nb,next]*q[ grid.v_idx(i+p,j+l) ]
+                end
             end
         end
     end
 
-    return fb
+    E = LinearMap( regT!, reg!, nf, grid.nq; ismutating=true  )
+    return E
 end

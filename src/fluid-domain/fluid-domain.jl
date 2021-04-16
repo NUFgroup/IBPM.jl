@@ -16,9 +16,12 @@ struct UniformGrid <: Grid
     offy::Float64
     len::Float64
     h::Float64
-    u::Any
-    v::Any
-    ω::Any
+    u_idx::Any
+    v_idx::Any
+    ω_idx::Any
+end
+
+struct MultiGrid <: Grid
 end
 
 function make_grid(nx::Int, ny::Int, offx::Float64, offy::Float64, len::Float64; mg=1::Int)
@@ -28,6 +31,7 @@ function make_grid(nx::Int, ny::Int, offx::Float64, offy::Float64, len::Float64;
     h = len / nx;  # Grid spacing
 
     if mg==1
+        # Define indexing functioons
         u(i, j) = (nx+1)*(j-1) + i
         v(i, j) = nu + nx*(j-1) + i
         ω(i, j) = (nx-1)*(j-1) + i

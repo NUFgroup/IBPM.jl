@@ -120,8 +120,8 @@ function base_flux!(::Type{T} where T <: InertialMotion,
         hc = grid.h * 2^( lev - 1 );
 
         # write fluid velocity flux in body-fixed frame
-        state.q0[ 1:(m-1)*n, lev ] .= Uinf * hc * cos(α);      # x-flux
-        state.q0[ (m-1)*n+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
+        state.q0[ 1:(m+1)*n, lev ] .= Uinf * hc * cos(α);      # x-flux
+        state.q0[ (m+1)*n+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
     end
 end
 
