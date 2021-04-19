@@ -29,6 +29,7 @@ NOTE: Most of the functionality for this is in fluid-operators/lin.jl
 """
 mutable struct IBMatrices
     C::LinearMap
+    Λ::Array{Float64, 2}
     Δinv::LinearMap
     E::LinearMap
     dst_plan::Any
@@ -38,10 +39,11 @@ mutable struct IBMatrices
                             (Γ, q) -> ibpm.rot!(Γ, q, grid),   # Transpose
                             grid.nq, grid.nΓ; ismutating=true)
         #mats.Lap = mats.C'*mats.C/Re    # Laplacian
+        mats.Λ = lap_eigs(grid)
 
         # Plan DST for inverse Laplacian
         mats.dst_plan = get_dst_plan(ones(Float64, grid.nx-1, grid.ny-1));
-        mats.Δinv = get_lap_inv(grid, lap_eigs(grid), mats.dst_plan)
+        mats.Δinv = get_lap_inv(grid, mats.Λ, mats.dst_plan)
 
         # Interpolation/regularization matrix
         mats.E = ibpm.setup_reg(grid, bodies)   # interface-coupling/interface-oupling.jl
@@ -74,15 +76,14 @@ mutable struct WorkingMemory
     Γ3::AbstractArray
     bc::AbstractArray
     function WorkingMemory(grid::Grid)
-        mg = (grid isa UniformGrid) ? 1 : grid.mg  # Number of grid levels
         work = new()
-        work.q1 = zeros(grid.nq, mg)
-        work.q2 = zeros(grid.nq, mg)
-        work.q3 = zeros(grid.nq, mg)
-        work.q4 = zeros(grid.nq, mg)
-        work.Γ1 = zeros(grid.nΓ, mg)
-        work.Γ2 = zeros(grid.nΓ, mg)
-        work.Γ3 = zeros(grid.nΓ, mg)
+        work.q1 = zeros(grid.nq, grid.mg)
+        work.q2 = zeros(grid.nq, grid.mg)
+        work.q3 = zeros(grid.nq, grid.mg)
+        work.q4 = zeros(grid.nq, grid.mg)
+        work.Γ1 = zeros(grid.nΓ, grid.mg)
+        work.Γ2 = zeros(grid.nΓ, grid.mg)
+        work.Γ3 = zeros(grid.nΓ, grid.mg)
         work.bc = zeros(grid.nΓ)
         return work
     end

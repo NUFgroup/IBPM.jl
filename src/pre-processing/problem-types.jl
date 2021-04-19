@@ -62,15 +62,14 @@ mutable struct IBState{T<:Grid} <: State
     slip::Float64
     function IBState(prob::IBProblem)
         grid = prob.model.grid
-        mg = (grid isa UniformGrid) ? 1 : grid.mg  # Number of grid levels
         nb, nf = get_body_info(prob.model.bodies)
 
         state = new{typeof(grid)}()
-        state.q  = zeros(grid.nq, mg)    # Flux
-        state.q0 = zeros(grid.nq, mg)    # Background flux
-        state.Γ  = zeros(grid.nΓ, mg)    # Circulation
-        state.ψ  = zeros(grid.nΓ, mg)    # Streamfunction
-        state.nonlin = [zeros(grid.nΓ, mg) for i=1:length(prob.scheme.β)]
+        state.q  = zeros(grid.nq, grid.mg)    # Flux
+        state.q0 = zeros(grid.nq, grid.mg)    # Background flux
+        state.Γ  = zeros(grid.nΓ, grid.mg)    # Circulation
+        state.ψ  = zeros(grid.nΓ, grid.mg)    # Streamfunction
+        state.nonlin = [zeros(grid.nΓ, grid.mg) for i=1:length(prob.scheme.β)]
         state.fb = [zeros(nf[i]) for i=1:length(nf)]
         state.F̃b = zeros(sum(nf))
         state.CD = zeros(length(prob.model.bodies))

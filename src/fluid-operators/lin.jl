@@ -6,54 +6,42 @@ therefore be pre-computed as a pre-processing step.
 """
 
 """
+    rot!( Γ, q, grid )
+
 Transpose of discrete curl (R matrix)
 
 Γ = rot( q )
 """
 function rot!( Γ, q, grid )
     u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx
-    for j=1:grid.ny-1
-        for i=1:grid.nx-1
-            Γ[ω(i, j)] = q[v(i+1, j+1)] - q[v(i, j+1)] - q[u(i+1, j+1)] + q[u(i+1, j)]
-        end
-    end
-end
-
-" Vectorized version... test this later "
-function rot_VEC!( Γ, q, grid )
-    u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx
-    i = 1:grid.nx-1
-    j = (1:grid.ny-1)'
+    i = 1:grid.nx-1; j = (1:grid.ny-1)'
     @. Γ[ω(i, j)] = q[v(i+1, j+1)] - q[v(i, j+1)] - q[u(i+1, j+1)] + q[u(i+1, j)]
 end
 
 """
-!***************************************************************!
-!*   returns curl(x) given x and the values of s'fun on bdy    *!
-!***************************************************************!
+    curl!( q, ψ, grid )
+
+Discrete curl operator
+
+q = curl( ψ )
 """
-function curl!( q, ψ, grid )
+function curl!( q, ψ, grid::UniformGrid )
    nx, ny = grid.nx, grid.ny
-   u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx
-   for j=2:ny-1
-      for i=2:nx
-         q[u(i, j)] = ψ[ω(i-1,j)] - ψ[ω(i-1, j-1)]
-      end
-   end
+   u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx  # Indices to x-flux, y-flux, vorticity/streamfunction
 
-   for i=2:nx
-      q[u(i, 1)] = ψ[ω(i-1, 1)]
-      q[u(i, ny)] = ψ[ω(i-1, ny-1)]
-   end
+   # x-fluxes
+   i=2:nx; j=(2:ny-1)'
+   @. q[u(i, j)] = ψ[ω(i-1,j)] - ψ[ω(i-1, j-1)]
+   j=1;  @. q[u(i, j)] =  ψ[ω(i-1, j)]          # Top boundary
+   j=ny; @. q[u(i, j)] = -ψ[ω(i-1, j-1)]        # Bottom boundary
 
-   for j=2:ny
-       q[v(1,j)] = -ψ[ω(1, j-1)]
-       for i=2:nx-1
-           q[v(i,j)] = ψ[ω(i-1,j-1)] - ψ[ω(i,j-1)]
-       end
-       q[v(nx,j)] = ψ[ω(nx-1,j-1)]
-    end
+   # y-fluxes
+   i=2:nx-1;  j=(2:ny)'
+   @. q[v(i,j)] = ψ[ω(i-1,j-1)] - ψ[ω(i,j-1)]
+   i=1;  @. q[v(i,j)] = -ψ[ω(i, j-1)]           # Left boundary
+   i=nx; @. q[v(i,j)] =  ψ[ω(i-1, j-1)]         # Right boundary
 end
+
 
 """
     vort2flux!( ψ, q, Γ, model::IBModel{UniformGrid, <:Body} )
@@ -83,32 +71,12 @@ function lap_eigs( grid::T ) where T <: Grid
     return Λ
 end
 
-function get_Ainv(grid, dst_plan, Re, dt::Float64; lev::Int=1)
-    """
-    Construct LinearMap to solve
-        (I + dt/2 * Beta * RC) * x = b for x
-    where Beta = 1/(Re * h^2)
-
-    Compare to get_RCinv in "ib_mats.jl"
-    """
-
-    hc = grid.h * 2^( lev - 1);  # Grid size at this level
-    # Solve by transforming to and from Fourier space and scaling by evals
-    Λ = lap_eigs( grid )
-    Λ̃ = 1 .+ Λ * dt/( 2 * Re * hc^2 );
-
-    # give output in same size as input b (before being reshaped)
-    return get_lap_inv(grid, Λ̃, dst_plan)
-end
-
-
-
+"""
+Construct LinearMap to solve inverse problem with Laplacian
+"""
 function get_lap_inv( grid::T,
                       Λ::AbstractArray,
                       dst_plan::Tuple{Any, Array{Float64, 2}}) where T <: Grid
-    """
-    Construct LinearMap to solve inverse problem with Laplacian
-    """
     nx, ny = grid.nx, grid.ny
     # give output in same size as input b (before being reshaped)
     return LinearMap(grid.nΓ; issymmetric=true, ismutating=true) do x, b
@@ -120,13 +88,6 @@ function get_lap_inv( grid::T,
     end
 end
 
-
-function get_AB(model::IBModel, dt::Float64)
-    A, Ainv = get_A(model, dt)
-    Binv = get_B(model, Ainv)
-    return A, Ainv, Binv
-end
-
 """
 Compute the matrix (as a LinearMap) that represents the modified Poisson
 operator (I + dt/2 * Beta * RC) arising from the implicit treatment of the
@@ -134,26 +95,31 @@ Laplacian. A system involving this matrix is solved to compute a trial
 circulation that doesn't satisfy the BCs, and then again to use the surface
 stresses to update the trial circulation so that it satisfies the BCs
 """
-function get_A(model::IBModel{UniformGrid, <:Body}, dt::Float64)
-    #Δ = (model.mats.C'*model.mats.C)/model.Re
-    #A = I - (dt/2 / (model.grid.h^2))*Δ
-    grid = model.grid
-    Λ = lap_eigs( grid )
-    Λ̃ = 1 .+ Λ * dt/( 2 * model.Re * grid.h^2 );
-    A = get_lap_inv(grid, 1 ./ Λ̃, model.mats.dst_plan)
-    Ainv = get_Ainv(model.grid, model.mats.dst_plan, model.Re, dt)
-    return A, Ainv
+function get_Ainv(model::IBModel, dt::Float64, h::Float64)
+    """
+    Construct LinearMap to solve
+        (I + dt/2 * Beta * RC) * x = b for x
+    where Beta = 1/(Re * h^2)
+
+    Solve by transforming to and from Fourier space and scaling by evals
+    """
+    Λ̃ = 1 .+ model.mats.Λ * dt/( 2*model.Re*h^2 );  # Implicit eigenvalues
+    return get_lap_inv(model.grid, Λ̃, model.mats.dst_plan)
 end
 
-function get_A(model::IBModel{MultiGrid, <:Body}, dt::Float64)
-    hc = [model.grid.h * 2^(lev-1) for lev=1:model.grid.mg]
-    Δ = (model.mats.C'*model.mats.C)/model.Re
-    A = [I - (dt/2 / (hc[lev]^2))*Δ for lev=1:model.grid.mg]
-    Ainv = [get_Ainv(model, dt; lev=lev) for lev=1:model.grid.mg]
-    return A, Ainv
+function get_A(model::IBModel, dt::Float64, h::Float64)
+    Λ̃ = 1 .- model.mats.Λ * dt/( 2*model.Re*h^2 );  # Explicit eigenvalues
+    return get_lap_inv(model.grid, 1 ./ Λ̃, model.mats.dst_plan)
 end
 
-function get_B(model::IBModel{UniformGrid, RigidBody{T}} where T <: Motion, Ainv::LinearMap)
+function get_AB(model::IBModel{UniformGrid, <:Body}, dt::Float64)
+    A = get_A(model, dt, model.grid.h)
+    Ainv = get_Ainv(model, dt, model.grid.h)
+    Binv = get_B(model, Ainv)
+    return A, Ainv, Binv
+end
+
+function get_B(model::IBModel{<:Grid, RigidBody{T}} where T <: Motion, Ainv::LinearMap)
     """
     Precompute 'B' matrix by evaluating mat-vec products for unit vectors
 
@@ -170,9 +136,9 @@ function get_B(model::IBModel{UniformGrid, RigidBody{T}} where T <: Motion, Ainv
 
     # TODO: Alternative... could create a dummy state to operate on here
     b = zeros( nftot );         # Working array
-    Γ = zeros(model.grid.nΓ, 1)    # Working array for circulation
-    ψ = zeros(model.grid.nΓ, 1)    # Working array for streamfunction
-    q = zeros(model.grid.nq, 1)    # Working array for velocity flux
+    Γ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for circulation
+    ψ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for streamfunction
+    q = zeros(model.grid.nq, model.grid.mg)    # Working array for velocity flux
 
     for j = 1 : nftot
         e .*= 0.0
@@ -181,6 +147,7 @@ function get_B(model::IBModel{UniformGrid, RigidBody{T}} where T <: Motion, Ainv
         B_times!( b, e, Ainv, model, Γ, ψ, q );
         B[:, j] = b
     end
+
     return inv(B)
     #return cholesky( 0.5*(B + B'))
 end
@@ -205,8 +172,16 @@ function B_times!(x::AbstractArray,
     mul!(Γ, Ainv, (E*C)'*z)  # Γ = ∇ x (E'*fb)
 
     #-- get vel flux q from circulation
-    vort2flux!( ψ, q, Γ, model );  # THIS SHOULD BE THE RIGHT ONE
+    vort2flux!( ψ, q, Γ, model );
 
     #--Interpolate onto the body
     @views mul!(x, E, q[:, 1])
+end
+
+function get_AB(model::IBModel{MultiGrid, <:Body}, dt::Float64)
+    hc = [model.grid.h * 2^(lev-1) for lev=1:model.grid.mg]
+    A = [get_A(model, dt, h) for h in hc]
+    Ainv = [get_Ainv(model, dt, h) for h in hc]
+    Binv = get_B(model, Ainv[1])
+    return A, Ainv, Binv
 end
