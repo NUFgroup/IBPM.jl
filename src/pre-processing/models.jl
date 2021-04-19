@@ -31,6 +31,7 @@ mutable struct IBMatrices
     C::LinearMap
     Δinv::LinearMap
     E::LinearMap
+    dst_plan::Any
     function IBMatrices(grid::T, bodies::Array{V, 1}) where T <: Grid where V <: Body
         mats = new()
         mats.C = LinearMap( (q, ψ) -> ibpm.curl!(q, ψ, grid),  # Forward
@@ -39,8 +40,8 @@ mutable struct IBMatrices
         #mats.Lap = mats.C'*mats.C/Re    # Laplacian
 
         # Plan DST for inverse Laplacian
-        dst_plan = get_dst_plan(ones(Float64, grid.nx-1, grid.ny-1));
-        mats.Δinv = get_lap_inv(grid, lap_eigs(grid), dst_plan)
+        mats.dst_plan = get_dst_plan(ones(Float64, grid.nx-1, grid.ny-1));
+        mats.Δinv = get_lap_inv(grid, lap_eigs(grid), mats.dst_plan)
 
         # Interpolation/regularization matrix
         mats.E = ibpm.setup_reg(grid, bodies)   # interface-coupling/interface-oupling.jl

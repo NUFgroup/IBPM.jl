@@ -11,13 +11,21 @@ Transpose of discrete curl (R matrix)
 Γ = rot( q )
 """
 function rot!( Γ, q, grid )
+    u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx
     for j=1:grid.ny-1
         for i=1:grid.nx-1
-            Γ[grid.ω_idx(i, j)] = q[grid.v_idx(i+1, j+1)] - q[grid.v_idx(i, j+1)] - q[grid.u_idx(i+1, j+1)] + q[grid.u_idx(i+1, j)]
+            Γ[ω(i, j)] = q[v(i+1, j+1)] - q[v(i, j+1)] - q[u(i+1, j+1)] + q[u(i+1, j)]
         end
     end
 end
 
+" Vectorized version... test this later "
+function rot_VEC!( Γ, q, grid )
+    u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx
+    i = 1:grid.nx-1
+    j = (1:grid.ny-1)'
+    @. Γ[ω(i, j)] = q[v(i+1, j+1)] - q[v(i, j+1)] - q[u(i+1, j+1)] + q[u(i+1, j)]
+end
 
 """
 !***************************************************************!
@@ -26,27 +34,30 @@ end
 """
 function curl!( q, ψ, grid )
    nx, ny = grid.nx, grid.ny
+   u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx
    for j=2:ny-1
       for i=2:nx
-         q[grid.u_idx(i, j)] = ψ[grid.ω_idx(i-1, j)] - ψ[grid.ω_idx(i-1, j-1)]
+         q[u(i, j)] = ψ[ω(i-1,j)] - ψ[ω(i-1, j-1)]
       end
    end
 
    for i=2:nx
-      q[grid.u_idx(i, 1)] = ψ[grid.ω_idx(i-1, 1)]
-      q[grid.u_idx(i, ny)] = ψ[grid.ω_idx(i-1, ny-1)]
+      q[u(i, 1)] = ψ[ω(i-1, 1)]
+      q[u(i, ny)] = ψ[ω(i-1, ny-1)]
    end
 
    for j=2:ny
-       q[grid.v_idx(1,j)] = -ψ[grid.ω_idx(1, j-1)]
+       q[v(1,j)] = -ψ[ω(1, j-1)]
        for i=2:nx-1
-           q[grid.v_idx(i,j)] = ψ[grid.ω_idx(i-1,j-1)] - ψ[grid.ω_idx(i,j-1)]
+           q[v(i,j)] = ψ[ω(i-1,j-1)] - ψ[ω(i,j-1)]
        end
-       q[grid.v_idx(nx,j)] = ψ[grid.ω_idx(nx-1,j-1)]
+       q[v(nx,j)] = ψ[ω(nx-1,j-1)]
     end
-    return q
 end
 
+"""
+    vort2flux!( ψ, q, Γ, model::IBModel{UniformGrid, <:Body} )
+"""
 function vort2flux!( ψ, q, Γ, model::IBModel{UniformGrid, <:Body} )
     mul!(ψ, model.mats.Δinv, Γ)     # Solve Poisson problem for streamfunction
     mul!(q, model.mats.C, ψ)          # q = ∇ x ψ
@@ -124,9 +135,13 @@ circulation that doesn't satisfy the BCs, and then again to use the surface
 stresses to update the trial circulation so that it satisfies the BCs
 """
 function get_A(model::IBModel{UniformGrid, <:Body}, dt::Float64)
-    Δ = (model.mats.C'*model.mats.C)/model.Re
-    A = I - (dt/2 / (model.grid.h^2))*Δ
-    Ainv = get_Ainv(model, dt)
+    #Δ = (model.mats.C'*model.mats.C)/model.Re
+    #A = I - (dt/2 / (model.grid.h^2))*Δ
+    grid = model.grid
+    Λ = lap_eigs( grid )
+    Λ̃ = 1 .+ Λ * dt/( 2 * model.Re * grid.h^2 );
+    A = get_lap_inv(grid, 1 ./ Λ̃, model.mats.dst_plan)
+    Ainv = get_Ainv(model.grid, model.mats.dst_plan, model.Re, dt)
     return A, Ainv
 end
 
@@ -166,10 +181,8 @@ function get_B(model::IBModel{UniformGrid, RigidBody{T}} where T <: Motion, Ainv
         B_times!( b, e, Ainv, model, Γ, ψ, q );
         B[:, j] = b
     end
-    #Binv = inv(B)
-    #println(B[1, 50:52]*model.grid.h)
-
-    return B
+    return inv(B)
+    #return cholesky( 0.5*(B + B'))
 end
 
 function B_times!(x::AbstractArray,

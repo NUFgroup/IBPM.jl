@@ -29,61 +29,20 @@ function advance!(state::IBState{UniformGrid},
 
     # Update surface quantities to be able to trim off part of circ
     # that doesn't satisfy no slip
+
     @views boundary_forces!(state.F̃b, qs[:, 1], state.q0[:, 1], prob)
     update_stress!(state, prob) #Compute integral quantities and store in state
 
     # --update circulation , vel-flux, and strmfcn on fine grid
     #   to satisfy no-slip updates state.Γ, state.ψ, state.q
+
     project_circ!(Γs, state, prob)
-    circ2_st_vflx!( state.ψ, state.q, state.Γ, prob.model );
+    vort2flux!( state.ψ, state.q, state.Γ, prob.model );
 
     #--A few simulation quantities of interest
     # get CFL (u * dt / dx) :
-    dt = prob.scheme.dt
-    state.cfl = maximum( abs.( (1/grid.h^2) * state.q * dt ) ) ;
+    state.cfl = maximum( abs.( (1/grid.h^2) * state.q * prob.scheme.dt ) ) ;
 end
-
-function advance!(state::IBState{MultiGrid},
-                  prob::IBProblem,
-                  t::Float64)
-    grid = prob.model.grid
-    update_bodies!(prob, t)
-
-    if MotionType(prob.model.bodies) == MovingGrid
-        base_flux!(state, prob, t)
-    end
-
-    # Alias working memory for notational clarity
-    #   This leaves work.Γ2, Γ3 and work.q1, q2 available
-    qs = prob.work.q1  # Trial flux
-    Γs = prob.work.Γ1  # Trial circulation
-
-    #Computes trial circulation Γs and associated strmfcn and vel flux that
-    #don't satisfy no-slip (from explicitly treated terms)
-    get_trial_state!(qs, Γs, state, prob)
-
-    # Update surface quantities to be able to trim off part of circ
-    # that doesn't satisfy no slip
-    @views boundary_forces!(state.F̃b, qs[:, 1], state.q0[:, 1], prob)
-    update_stress!(state, prob) #Compute integral quantities and store in state
-
-    # --update circulation , vel-flux, and strmfcn on fine grid
-    #   to satisfy no-slip updates state.Γ, state.ψ, state.q
-    project_circ!(Γs, state, prob)    # OK TO HERE
-
-    # --Update circulation on all grids based on fine-grid correction
-    for lev = 2:grid.mg
-        @views coarsify!( state.Γ[:, lev-1], state.Γ[:, lev], grid);
-    end
-
-    circ2_st_vflx!( state.ψ, state.q, state.Γ, prob.model, grid.mg);
-
-    #--A few simulation quantities of interest
-    # get CFL (u * dt / dx) :
-    dt = prob.scheme.dt
-    state.cfl = maximum( abs.( (1/(grid.h^2)) * @view(state.q[:, 1]) * dt ) ) ;
-end
-
 
 """
     get_trial_state!(qs, Γs, state, prob)
@@ -104,90 +63,107 @@ Then do Ainv of that to back out trial circ
 function get_trial_state!(qs, Γs, state, prob) end
 
 function get_trial_state!(qs::AbstractArray,
-                        Γs::AbstractArray,
-                       state::IBState{UniformGrid},
-                       prob::IBProblem)
+                          Γs::AbstractArray,
+                          state::IBState{UniformGrid},
+                          prob::IBProblem)
     dt = prob.scheme.dt
     work = prob.work
     rhs = work.Γ2  # RHS of discretized equation
+    println("=== TRIAL STATE ===")
 
     #compute the nonlinear term for the current time step
-    get_nonlin!( state.nonlin[1], state, prob );
+    nonlinear!( state.nonlin[1], state, prob );
+
+    println(sum(state.nonlin[1].^2))  # OK... 'rhs' in Fortran code
+    println(sum(state.nonlin[2].^2))
 
     # Explicit part of Laplacian
-    mul!(rhs, prob.A, state.Γ)
+    #mul!(rhs, prob.A, state.Γ)
+
+    #println(sum(state.Γ.^2))  ### OK
+    #println(sum(rhs.^2))  ### NOT MATCHED IN FORTRAN
+
+    ##### DEBUG:  A must be the problem
+    # dst_inv uses divided by Λ.... want to be MULTIPLIED by
+    #   (1 - 0.5*dt*Λ/(Re*h^2) / (1 + 0.5*dt*Λ/(Re*h^2) )
+    # with scale 1/(4*nx*ny)
+    grid = prob.model.grid
+    Re = prob.model.Re
+    Λ = lap_eigs(grid)
+    scale = (4*grid.nx*grid.ny)
+    """Λ̃ = (1 .- 0.5*dt*Λ/(Re*grid.h^2) ) ./ (1 .+ 0.5*dt*Λ/(Re*grid.h^2) )
+    Γ̃ = reshape(state.Γ, grid.nx-1, grid.ny-1)
+    F̃ = reshape(rhs, grid.nx-1, grid.ny-1)
+    dst_inv!(F̃, Γ̃, 1 ./Λ̃, prob.model.mats.dst_plan; scale=1.0/(4*grid.nx*grid.ny))
+    #F̃ = dst( Λ̃ .* dst(Γ̃) ) / (4*grid.nx*grid.ny)
+
+    rhs = reshape(F̃, grid.nΓ, 1)
+    println(sum(rhs.^2))  # OK HERE
+
+    F̃ = reshape(state.nonlin[1], grid.nx-1, grid.ny-1)
+    con1 =  prob.scheme.β[1]*dt/grid.h^2
+    con2 = -prob.scheme.β[2]*dt/grid.h^2
+
+    mul!(work.Γ3, prob.Ainv, con1*state.nonlin[1])
+    println(sum(work.Γ3.^2))  # OK
+
+    println("END DEBUG")"""
+
+    ###
 
     # Explicit nonlinear terms from multistep scheme
     for n=1:length(prob.scheme.β)
         work.Γ3 .= state.nonlin[n]
         rmul!(work.Γ3, prob.scheme.β[n]*dt)
+
+        # DEBUG: WHY DO WE NEED THIS??? LOOK AT CON1, CON2, ETC
+        work.Γ3 ./= grid.h^2
+
         rhs .-= work.Γ3
     end
-
-    # Store current nonlinear term
-    state.nonlin[2] .= state.nonlin[1];
+    #println(sum(rhs.^2))
 
     # Trial circulation  Γs = Ainv * rhs
     mul!(Γs, prob.Ainv, rhs);
 
+    ### DEBUG
+    Γ̃ = reshape(state.Γ, grid.nx-1, grid.ny-1)
+    f1 = reshape(state.nonlin[1], grid.nx-1, grid.ny-1)
+    f2 = reshape(state.nonlin[2], grid.nx-1, grid.ny-1)
+
+    #println(sum(Γ̃.^2))   # OK, matches omega in fortran
+    #println(sum(f1.^2))  # OK, matches rhs in fortran
+    #println(sum(f2.^2))  # OK, matches rhs in fortran
+
+    lam1 = (1 .- 0.5*dt*Λ/(Re*grid.h^2) ) ./ scale
+    lam1i =  1 ./ (1 .+ 0.5*dt*Λ/(Re*grid.h^2) )
+    con1 = prob.scheme.β[1]*dt/grid.h^2/scale
+    con2 = prob.scheme.β[2]*dt/grid.h^2/scale
+    Γ̃ = dst( lam1i .* ( dst( con1*f1 .+ con2*f2  ) .+ lam1 .* dst( Γ̃) ) )
+    Γs .= reshape(Γ̃, grid.nΓ, 1)
+    ### END DEBUG
+
+    print("Done with explicit time stepping: ")
+    println(sum(Γs.^2))
+
     # Trial velocity  (note ψ is used here as a dummy variable)
-    circ2_st_vflx!( state.ψ, qs, Γs, prob.model );
+    #vort2flux!( state.ψ, qs, Γs, prob.model )  # DEBUG: CHECK THIS.. POISSON IN PARTICULAR
+    laminv = (1 ./ Λ) ./ scale
+    state.ψ = dst( laminv .* dst( Γ̃ ) )
+    state.ψ = reshape(state.ψ, grid.nΓ, 1)
+    mul!(qs, prob.model.mats.C, state.ψ)
+
+    println(sum(Γs.^2))
+    println(sum(state.ψ.^2))
+    println(sum(qs.^2))
+    # DEBUG: OK TO HERE
+
+    # Store current nonlinear term
+    state.nonlin[2] .= state.nonlin[1];
+
+    println("=== DONE WITH TRIAL STATE ===")
 end
 
-function get_trial_state!(qs::AbstractArray,
-                        Γs::AbstractArray,
-                       state::IBState{MultiGrid},
-                       prob::IBProblem)
-    dt = prob.scheme.dt
-    work = prob.work
-    grid = prob.model.grid
-    rhsbc = work.bc
-    rhs = work.Γ2  # RHS of discretized equation
-
-    for lev = grid.mg:-1:1
-
-        # compute the nonlinear term for the current time step
-        get_nonlin!( @view(state.nonlin[1][:, lev]), state, prob, lev );
-
-        # contribution of Laplacian term...
-        rhsbc .*= 0.0
-        if lev < grid.mg
-            # from explicit treatment of circulation
-            get_Lap_BCs!( rhsbc, @view(state.Γ[:, lev+1]), lev, prob.model )
-
-            # from current (trial) vorticity at previous grid level
-            get_Lap_BCs!( rhsbc, @view(Γs[:,lev+1]), lev, prob.model)
-        end
-
-        # Combine explicit Laplacian and nonlinear terms into a rhs
-        @views mul!(rhs[:, lev], prob.A[lev], state.Γ[:, lev])
-
-        for n=1:length(prob.scheme.β)
-            work.Γ3[:, lev] .= state.nonlin[n][:, lev]
-            rmul!(work.Γ3, prob.scheme.β[n]*dt)
-            rhs .-= work.Γ3
-        end
-
-        # Include boundary conditions
-        #   High-level: rhs += 0.5*rhsbc
-        work.Γ3[:, lev] .= rhsbc
-        rmul!(work.Γ3, 0.5*dt)
-        rhs .+= work.Γ3
-
-        # Trial circulation  Γs = Ainv * rhs
-        # TODO: use @view to do in-place multiplication
-        # Doesn't work here because of view and FFT plan for even indices... WHY??
-        Γs[:, lev] .= prob.Ainv[lev] * rhs[:, lev]
-    end
-
-    # Store nonlinear solution for use in next time step
-    state.nonlin[2] .= state.nonlin[1]
-
-    # Trial velocity on 1st grid level (don't need all grids)
-    #   Streamfunction state.ψ is a dummy variable here to compute qs from Γs
-    grid = prob.model.grid
-    circ2_st_vflx!( state.ψ, qs, Γs, prob.model, 2 );
-end
 
 """
     boundary_forces!(F̃b, qs, q0, prob)
@@ -225,13 +201,14 @@ function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
     broadcast!(+, qwork, qs, q0)                     # qs + q0
     mul!(F̃b, E, qwork)                               # E*(qs .+ state.q0)... using fb here as working array
 
+    println("=== BOUNDARY FORCES ===")
+    println(sum(q0.^2))
     println(sum(qs.^2))
     println(sum(F̃b.^2))
 
-    #F̃b .= (1/h)*prob.Binv*F̃b                         # Allocates a small amount of memory
-    F̃b .= (1/h)*(prob.Binv\F̃b)  # NOTE RIGHT NOW prob.Binv is cholesky(B)... so still has to be inverted
+    F̃b .= prob.Binv*F̃b                         # Allocates a small amount of memory
 
-    println(sum(F̃b.^2))
+    println(sum(F̃b.^2))   # DEBUG: GOOD!!
 end
 
 """
@@ -286,37 +263,23 @@ function project_circ!(::Type{V} where V<:Motion,
     High-level version:
         state.Γ[:, 1] .= Γs .- prob.Ainv[1] * (mats.RET*fb_til_dt)
     """
+    println("=== PROJECT_CIRC ===")
     Γwork = @view(prob.work.Γ3[:, 1]) # Working memory
-    RET = prob.model.mats.RET   # Precomputed R * E'
+    E, C = prob.model.mats.E, prob.model.mats.C
     fb_til_dt = state.F̃b
+
+    println(sum(Γs.^2))
 
     # Low-level version:
     state.Γ .= Γs   # Now Γs is free for working memory
-    @views mul!( Γs[:, 1], RET, fb_til_dt)
+    @views mul!( Γs[:, 1], (E*C)', fb_til_dt)  # Γ = ∇ x (E'*fb)
     @views mul!( Γwork, prob.Ainv, Γs[:, 1])
     state.Γ[:, 1] .-= Γwork
+
+    println(sum(state.Γ[:, 1].^2))
+    println("DONE WITH PROJECT_CIRC")
 end
 
-function project_circ!(::Type{V} where V<:Motion,
-                       Γs::AbstractArray,
-                       state::IBState{MultiGrid},
-                       prob::IBProblem)
-    """
-    High-level version:
-        state.Γ[:, 1] .= Γs .- prob.Ainv[1] * (mats.RET*fb_til_dt)
-    """
-    Γwork = @view(prob.work.Γ3[:, 1]) # Working memory
-    RET = prob.model.mats.RET   # Precomputed R * E'
-    fb_til_dt = state.F̃b
-
-    # Low-level version:
-    state.Γ .= Γs
-    @views mul!( Γs[:, 1], RET, fb_til_dt)
-    @views mul!( Γwork, prob.Ainv[1], Γs[:, 1])  # This is the only difference with the UniformGrid version
-    state.Γ[:, 1] .-= Γwork
-end
-
-#Utilities for storing stress values
 """
     update_stress!(state, prob)
 

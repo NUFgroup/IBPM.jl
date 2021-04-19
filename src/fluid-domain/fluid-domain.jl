@@ -31,10 +31,14 @@ function make_grid(nx::Int, ny::Int, offx::Float64, offy::Float64, len::Float64;
     h = len / nx;  # Grid spacing
 
     if mg==1
-        # Define indexing functioons
-        u(i, j) = (nx+1)*(j-1) + i
-        v(i, j) = nu + nx*(j-1) + i
-        ω(i, j) = (nx-1)*(j-1) + i
+        # Define indexing functions
+        # TODO: move to arrays?? This allocates memory
+        u(x_idx, y_idx) = @. x_idx + (nx+1)*(y_idx-1)'
+        v(x_idx, y_idx) = @. x_idx + nx*(y_idx-1)' + nu
+        ω(x_idx, y_idx) = @. x_idx + (nx-1)*(y_idx-1)'
+        #u = (1:nx+1) .+ (nx+1)*(0:ny-1)'
+        #v = (1:nx) .+ nx*(0:ny)' .+ nu
+        #ω = (1:nx-1) .+ (nx-1)*(0:ny-2)'
         return UniformGrid(nx, ny, nΓ, nq, offx, offy, len, h, u, v, ω)
     end
 end
