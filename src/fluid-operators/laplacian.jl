@@ -1,58 +1,5 @@
 """
-Linear operations associated with the governing flow equations
-
-Note: all matrices in this file are "static" and do not vary in time. They may
-therefore be pre-computed as a pre-processing step.
-"""
-
-"""
-    rot!( Γ, q, grid )
-
-Transpose of discrete curl (R matrix)
-
-Γ = rot( q )
-"""
-function rot!( Γ, q, grid )
-    u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx
-    i = 1:grid.nx-1; j = (1:grid.ny-1)'
-    @. Γ[ω(i, j)] = q[v(i+1, j+1)] - q[v(i, j+1)] - q[u(i+1, j+1)] + q[u(i+1, j)]
-end
-
-"""
-    curl!( q, ψ, grid )
-
-Discrete curl operator
-
-q = curl( ψ )
-"""
-function curl!( q, ψ, grid::UniformGrid )
-   nx, ny = grid.nx, grid.ny
-   u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx  # Indices to x-flux, y-flux, vorticity/streamfunction
-
-   # x-fluxes
-   i=2:nx; j=(2:ny-1)'
-   @. q[u(i, j)] = ψ[ω(i-1,j)] - ψ[ω(i-1, j-1)]
-   j=1;  @. q[u(i, j)] =  ψ[ω(i-1, j)]          # Top boundary
-   j=ny; @. q[u(i, j)] = -ψ[ω(i-1, j-1)]        # Bottom boundary
-
-   # y-fluxes
-   i=2:nx-1;  j=(2:ny)'
-   @. q[v(i,j)] = ψ[ω(i-1,j-1)] - ψ[ω(i,j-1)]
-   i=1;  @. q[v(i,j)] = -ψ[ω(i, j-1)]           # Left boundary
-   i=nx; @. q[v(i,j)] =  ψ[ω(i-1, j-1)]         # Right boundary
-end
-
-
-"""
-    vort2flux!( ψ, q, Γ, model::IBModel{UniformGrid, <:Body} )
-"""
-function vort2flux!( ψ, q, Γ, model::IBModel{UniformGrid, <:Body} )
-    mul!(ψ, model.mats.Δinv, Γ)     # Solve Poisson problem for streamfunction
-    mul!(q, model.mats.C, ψ)          # q = ∇ x ψ
-end
-
-"""
-Solving linear systems involving C^TC comes up in multiple places:
+Solving linear systems involving the Laplacian C^TC comes up in multiple places:
     -backing out vel flux from circulation, done multiple times in a time step
     -Solving a modified Poisson system (I + dt/2 * Beta * RC) that arises from
         the implicit treatment of the Laplacian
@@ -115,26 +62,24 @@ end
 function get_AB(model::IBModel{UniformGrid, <:Body}, dt::Float64)
     A = get_A(model, dt, model.grid.h)
     Ainv = get_Ainv(model, dt, model.grid.h)
-    Binv = get_B(model, Ainv)
+    Binv = get_Binv(model, Ainv)
     return A, Ainv, Binv
 end
 
-function get_B(model::IBModel{<:Grid, RigidBody{T}} where T <: Motion, Ainv::LinearMap)
-    """
-    Precompute 'B' matrix by evaluating mat-vec products for unit vectors
+"""
+Precompute 'Binv' matrix by evaluating mat-vec products for unit vectors
 
-    This is a big speedup when the interpolation operator E isn't going to
-    change (no FSI, for instance)
-    """
+This is a big speedup when the interpolation operator E isn't going to
+change (no FSI, for instance)
+"""
+function get_Binv(model::IBModel{<:Grid, RigidBody{T}} where T <: Motion, Ainv::LinearMap)
     nb, nf = get_body_info(model.bodies)
     nftot = sum(nf)
 
-    # need to build and store surface stress matrix and its inverse if at first time step
     B = zeros( nftot, nftot );
     # Pre-allocate arrays
     e = zeros( nftot );         # Unit vector
 
-    # TODO: Alternative... could create a dummy state to operate on here
     b = zeros( nftot );         # Working array
     Γ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for circulation
     ψ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for streamfunction
@@ -147,11 +92,17 @@ function get_B(model::IBModel{<:Grid, RigidBody{T}} where T <: Motion, Ainv::Lin
         B_times!( b, e, Ainv, model, Γ, ψ, q );
         B[:, j] = b
     end
-
+    println(sum(B.^2))
+    #sleep(100)
     return inv(B)
-    #return cholesky( 0.5*(B + B'))
 end
 
+"""
+%Performs one matrix multiply of B*z, where B is the matrix used to solve
+%for the surface stresses that enforce the no-slip boundary condition.
+% (B arises from an LU factorization of the full system)
+Note ψ is just a dummy work array for circ2_st_vflx
+"""
 function B_times!(x::AbstractArray,
                   z::AbstractArray,
                   Ainv::LinearMap,
@@ -159,16 +110,9 @@ function B_times!(x::AbstractArray,
                   Γ::Array{Float64, 2},
                   ψ::Array{Float64, 2},
                   q::Array{Float64, 2})
-    """
-    %Performs one matrix multiply of B*z, where B is the matrix used to solve
-    %for the surface stresses that enforce the no-slip boundary condition.
-    % (B arises from an LU factorization of the full system)
-    Note ψ is just a dummy work array for circ2_st_vflx
-    """
     E, C = model.mats.E, model.mats.C
 
-    # Get circulation from surface stress Γ = Ainv * (EC)' * z
-    #  We don't include BCs for Ainv because ET*z is compact
+    # Get circulation from surface stress
     mul!(Γ, Ainv, (E*C)'*z)  # Γ = ∇ x (E'*fb)
 
     #-- get vel flux q from circulation
@@ -178,10 +122,51 @@ function B_times!(x::AbstractArray,
     @views mul!(x, E, q[:, 1])
 end
 
+
+
+function B_times!(x::AbstractArray,
+                  z::AbstractArray,
+                  Ainv::LinearMap,
+                  model::IBModel{MultiGrid, RigidBody{T}} where T<:Motion,
+                  Γ::Array{Float64, 2},
+                  ψ::Array{Float64, 2},
+                  q::Array{Float64, 2})
+    """
+    %Performs one matrix multiply of B*z, where B is the matrix used to solve
+    %for the surface stresses that enforce the no-slip boundary condition.
+    % (B arises from an LU factorization of the full system)
+    MultiGrid version:
+    Note ψ is just a dummy variable for computing velocity flux
+        Also this only uses Ainv on the first level
+    """
+    E, C = model.mats.E, model.mats.C
+    Γ .*= 0.0
+
+    # Get circulation from surface stress
+    #mul!(@view(Γ[:, 1]), Ainv, (E*C)'*z)  # Γ = ∇ x (E'*fb)
+    Γ[:, 1] = Ainv * ( (E*C)'*z )    # Γ = ∇ x (E'*fb)
+
+    #println("=== B_TIMES ===")
+    #println(sum( ( E'*z ).^2))
+    #println(sum( ( C'*(E'*z) ).^2))
+    #println(sum(Γ[:, 1].^2))
+
+    #-- get vel flux from circulation
+    vort2flux!( ψ, q, Γ, model, model.grid.mg );  # THIS IS THE MOST EXPENSIVE THING
+
+    #println(sum(Γ.^2))
+    #println(sum(q.^2))
+    #println(sum(ψ.^2))
+
+    #--Interpolate onto the body
+    @views mul!(x, E, q[:, 1])
+end
+
+
 function get_AB(model::IBModel{MultiGrid, <:Body}, dt::Float64)
     hc = [model.grid.h * 2^(lev-1) for lev=1:model.grid.mg]
     A = [get_A(model, dt, h) for h in hc]
     Ainv = [get_Ainv(model, dt, h) for h in hc]
-    Binv = get_B(model, Ainv[1])
+    Binv = get_Binv(model, Ainv[1])  # Only need this on the finest grid
     return A, Ainv, Binv
 end

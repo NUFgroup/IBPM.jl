@@ -47,22 +47,19 @@ function make_grid(nx::Int, ny::Int, offx::Float64, offy::Float64, len::Float64;
     nq = nu + nv;  # Total num of vel (flux) points
     h = len / nx;  # Grid spacing
 
-    if mg==1
-        # Define indexing functions
-        u(x_idx, y_idx) = @. x_idx + (nx+1)*(y_idx-1)'
-        v(x_idx, y_idx) = @. x_idx + nx*(y_idx-1)' + nu
-        ω(x_idx, y_idx) = @. x_idx + (nx-1)*(y_idx-1)'
-        return UniformGrid(nx, ny, nΓ, nq, mg, offx, offy, len, h, u, v, ω)
-    end
+    # Define indexing functions
+    u(x_idx, y_idx) = @. x_idx + (nx+1)*(y_idx-1)'
+    v(x_idx, y_idx) = @. x_idx + nx*(y_idx-1)' + nu
+    ω(x_idx, y_idx) = @. x_idx + (nx-1)*(y_idx-1)'
 
+    if mg==1
+        return UniformGrid(nx, ny, nΓ, nq, mg, offx, offy, len, h, u, v, ω)
     else
-        # Define indexing functions
-        u(x_idx, y_idx) = @. x_idx + (nx+1)*(y_idx-1)'
-        v(x_idx, y_idx) = @. x_idx + nx*(y_idx-1)' + nu
-        ω(x_idx, y_idx) = @. x_idx + (nx-1)*(y_idx-1)'
+        # Predefine constant offsets for indexing boundary conditions
         left = 0;  right = ny+1
         bot = 2*(ny+1); top = 2*(ny+1) + nx+1
-        return UniformGrid(nx, ny, nΓ, nq, mg, offx, offy, len, h, u, v, ω,
+        return MultiGrid(nx, ny, nΓ, nq, mg, offx, offy, len, h, u, v, ω,
             left, right, bot, top)
+    end
 
 end
