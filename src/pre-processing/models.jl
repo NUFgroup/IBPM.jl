@@ -67,15 +67,15 @@ Pre-allocate memory to certain vectors that can be re-used throughout the
 computation process
 """
 mutable struct WorkingMemory
-    q1::AbstractArray
-    q2::AbstractArray
-    q3::AbstractArray
-    q4::AbstractArray
-    Γ1::AbstractArray
-    Γ2::AbstractArray
-    Γ3::AbstractArray
-    Γbc::AbstractArray    # Poisson boundary conditions for multigrid
-    rhsbc::AbstractArray  # Time-stepping boundary conditions for multigrid
+    q1::Array{Float64, 2}
+    q2::Array{Float64, 2}
+    q3::Array{Float64, 2}
+    q4::Array{Float64, 2}
+    Γ1::Array{Float64, 2}
+    Γ2::Array{Float64, 2}
+    Γ3::Array{Float64, 2}
+    Γbc::Array{Float64, 1}    # Poisson boundary conditions for multigrid
+    rhsbc::Array{Float64, 1}  # Time-stepping boundary conditions for multigrid
     function WorkingMemory(grid::Grid)
         work = new()
         work.q1 = zeros(grid.nq, grid.mg)

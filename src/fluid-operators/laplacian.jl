@@ -22,7 +22,7 @@ end
 Construct LinearMap to solve inverse problem with Laplacian
 """
 function get_lap_inv( grid::T,
-                      Λ::AbstractArray,
+                      Λ::Array{Float64, 2},
                       dst_plan::Tuple{Any, Array{Float64, 2}}) where T <: Grid
     nx, ny = grid.nx, grid.ny
     # give output in same size as input b (before being reshaped)
@@ -32,6 +32,7 @@ function get_lap_inv( grid::T,
         x = reshape( x, nx-1, ny-1)
         dst_inv!(x, b, Λ, dst_plan; scale=1/(4*nx*ny)); # Include scale to make fwd/inv transforms equal
         x = reshape( x, (nx-1)*(ny-1), 1 )
+        return nothing
     end
 end
 
@@ -102,8 +103,8 @@ end
 % (B arises from an LU factorization of the full system)
 Note ψ is just a dummy work array for circ2_st_vflx
 """
-function B_times!(x::AbstractArray,
-                  z::AbstractArray,
+function B_times!(x::Array{Float64, 1},
+                  z::Array{Float64, 1},
                   Ainv::LinearMap,
                   model::IBModel{UniformGrid, RigidBody{T}} where T<:Motion,
                   Γ::Array{Float64, 2},
@@ -123,8 +124,8 @@ end
 
 
 
-function B_times!(x::AbstractArray,
-                  z::AbstractArray,
+function B_times!(x::Array{Float64, 1},
+                  z::Array{Float64, 1},
                   Ainv::LinearMap,
                   model::IBModel{MultiGrid, RigidBody{T}} where T<:Motion,
                   Γ::Array{Float64, 2},
@@ -142,20 +143,10 @@ function B_times!(x::AbstractArray,
     Γ .*= 0.0
 
     # Get circulation from surface stress
-    #mul!(@view(Γ[:, 1]), Ainv, (E*C)'*z)  # Γ = ∇ x (E'*fb)
     Γ[:, 1] = Ainv * ( (E*C)'*z )    # Γ = ∇ x (E'*fb)
 
-    #println("=== B_TIMES ===")
-    #println(sum( ( E'*z ).^2))
-    #println(sum( ( C'*(E'*z) ).^2))
-    #println(sum(Γ[:, 1].^2))
-
     #-- get vel flux from circulation
-    vort2flux!( ψ, q, Γ, model, model.grid.mg );  # THIS IS THE MOST EXPENSIVE THING
-
-    #println(sum(Γ.^2))
-    #println(sum(q.^2))
-    #println(sum(ψ.^2))
+    vort2flux!( ψ, q, Γ, model, model.grid.mg );
 
     #--Interpolate onto the body
     @views mul!(x, E, q[:, 1])

@@ -40,6 +40,8 @@ function advance!(state::IBState{UniformGrid},
     #--A few simulation quantities of interest
     # get CFL (u * dt / dx) :
     state.cfl = maximum( abs.( (1/grid.h^2) * state.q * prob.scheme.dt ) ) ;
+
+    return nothing
 end
 
 
@@ -72,6 +74,8 @@ function advance!(state::IBState{MultiGrid},
     #   to satisfy no-slip updates state.Γ, state.ψ, state.q
     project_circ!(Γs, state, prob)
     #println("Final circulation: ", sum(state.Γ.^2))
+
+    # Interpolate values from finer grid to center region of coarse grid
     vort2flux!( state.ψ, state.q, state.Γ, prob.model, grid.mg );
 
     #println("Final circulation: ", sum(state.Γ.^2))
@@ -82,6 +86,8 @@ function advance!(state::IBState{MultiGrid},
     dt = prob.scheme.dt
     # TODO: DOES THIS ALLOCATE??
     state.cfl = maximum( @. abs( (1/(grid.h^2))*state.q[:, 1]*dt ) ) ;
+
+    return nothing
 end
 
 
@@ -120,19 +126,21 @@ function get_trial_state!(qs::AbstractArray,
 
     # Explicit nonlinear terms from multistep scheme
     for n=1:length(prob.scheme.β)
-        work.Γ3 .= state.nonlin[n]
-        rmul!(work.Γ3, prob.scheme.β[n]*dt)
-        rhs .+= work.Γ3
+        rhs .+= prob.scheme.β[n]*dt*state.nonlin[n];
     end
 
     # Trial circulation  Γs = Ainv * rhs
     mul!(Γs, prob.Ainv, rhs);
+
+    #println(sum(Γs.^2))
 
     # Trial velocity  (note ψ is used here as a dummy variable)
     vort2flux!( state.ψ, qs, Γs, prob.model )
 
     # Store current nonlinear term
     state.nonlin[2] .= state.nonlin[1];
+
+    return nothing
 end
 
 
@@ -145,11 +153,11 @@ function get_trial_state!(qs::AbstractArray,
     work = prob.model.work
     grid = prob.model.grid
     rhsbc = work.rhsbc
-    rhs = work.Γ2[:, 1]  # RHS of discretized equation
+    rhs = @view(work.Γ2[:, 1])  # RHS of discretized equation
     bc = work.Γbc;
 
     for lev=grid.mg:-1:1
-        bc .= 0.0; rhsbc .= 0.0
+        bc .*= 0.0; rhsbc .*= 0.0
         hc = grid.h * 2^( lev - 1);
         #println("=== TRIAL STATE, LEVEL ", lev, " ===")
 
@@ -166,31 +174,22 @@ function get_trial_state!(qs::AbstractArray,
         @views mul!( rhs, prob.A[lev], state.Γ[:, lev] )
 
         for n=1:length(prob.scheme.β)
-            work.Γ3[:, lev] .= state.nonlin[n][:, lev]
-            work.Γ3 .*= prob.scheme.β[n]*dt
-            rhs .+= work.Γ3[:, lev]
+            rhs .+= prob.scheme.β[n]*dt*@view(state.nonlin[n][:, lev])
         end
 
         # Include boundary conditions
-        #   High-level: rhs += 0.5*rhsbc
-        work.Γ3[:, lev] .= rhsbc
-        work.Γ3[:, lev] .*= 0.5*dt
-        rhs .+= work.Γ3[:, lev]
+        rhs .+= 0.5*dt*rhsbc
 
         # Trial circulation  Γs = Ainv * rhs
-        # TODO: use @view to do in-place multiplication
-        # Doesn't work here because of view and FFT plan for even indices... WHY??
-        #Γs[:, lev] .= prob.Ainv[lev] * rhs
         @views mul!(Γs[:, lev], prob.Ainv[lev], rhs)
-
-        #println(sum(Γs[:, lev].^2))
     end
 
     # Store nonlinear solution for use in next time step
     state.nonlin[2] .= state.nonlin[1]
 
-    # TODO: THIS WAS JUST lev=2 IN THE MATLAB... DO WE NEED ALL?
     vort2flux!( state.ψ, qs, Γs, prob.model, grid.mg )
+
+    return nothing
 end
 
 """
@@ -226,17 +225,13 @@ function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
 
     E = prob.model.mats.E
     h = prob.model.grid.h
-    # Working memory for in-place operations
-    qwork = @view(prob.model.work.q2[:, 1])
+
+    qwork = @view(prob.model.work.q2[:, 1])  # Working memory for in-place operations
     broadcast!(+, qwork, qs, q0)                     # qs + q0
     mul!(F̃b, E, qwork)                               # E*(qs .+ state.q0)... using fb here as working array
-    #println(sum(q0.^2))
-    #println(sum(qs.^2))
-    #println(sum(F̃b.^2))
     F̃b .= prob.Binv*F̃b                         # Allocates a small amount of memory
 
-    #println(sum(F̃b.^2))
-    #sleep(100)
+    return nothing
 end
 
 """
@@ -266,6 +261,8 @@ function boundary_forces!(::Type{RotatingCyl},
     mul!(F̃work, E, qwork)                  # E*(qs .+ state.q0)
     F̃work .-= get_ub(prob.model.bodies)*prob.model.grid.h   # Enforce no-slip conditions
     mul!(F̃b, prob.Binv, F̃work/h);
+
+    return nothing
 end
 
 """
@@ -300,6 +297,8 @@ function project_circ!(::Type{V} where V<:Motion,
     @views mul!( Γs[:, 1], (E*C)', fb_til_dt)  # Γ = ∇ x (E'*fb)
     @views mul!( Γwork, prob.Ainv, Γs[:, 1])
     state.Γ[:, 1] .-= Γwork
+
+    return nothing
 end
 
 function project_circ!(::Type{V} where V<:Motion,
@@ -324,6 +323,7 @@ function project_circ!(::Type{V} where V<:Motion,
 
     state.Γ[:, 1] .-= Γwork
 
+    return nothing
 end
 
 """
@@ -354,6 +354,8 @@ function update_stress!(state::IBState,
         # update body index
         nbod_tally += nf[j];
     end
+
+    return nothing
 end
 
 """

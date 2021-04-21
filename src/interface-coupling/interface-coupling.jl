@@ -1,5 +1,9 @@
-"""discrete delta function used to relate flow to structure quantities"""
-function δh( rf, rb , dr; tol=1e-12 )
+"""
+    δh( rf, rb , dr )
+
+Discrete delta function used to relate flow to structure quantities
+"""
+function δh( rf, rb , dr )
     """
     %take points on the flow domain (r) that are within the support
     %(supp) of the IB points (rb), and evaluate
@@ -7,6 +11,13 @@ function δh( rf, rb , dr; tol=1e-12 )
 
     %Currently uses the Yang3 smooth delta function (see Yang et al, JCP,
     %2009), which has a support of 6*h (3*h on each side)
+
+    Note that this gives slightly different answers than Fortran at around 1e-4,
+        apparently due to slight differences in the floating point arithmetic.
+        As far as I can tell, this is what sets the bound on agreement between
+        the two implementations.  It's possible this might be improved with
+        arbitrary precision arithmetic (i.e. BigFloats), but at least it
+        doesn't seem to be a bug.
     """
 
     # Note: the result is delta * h
@@ -14,6 +25,7 @@ function δh( rf, rb , dr; tol=1e-12 )
     r1 = r/dr; r2 = r1*r1; r3 = r2*r1; r4 = r3*r1;
 
     if (r1 <= 1.0)
+        #println("r < 1")
         a5 = asin((1.0/2.0)*sqrt(3.0)*(2.0*r1 - 1.0));
         a8 = sqrt(1.0 - 12.0*r2 + 12.0*r1);
 
@@ -23,6 +35,7 @@ function δh( rf, rb , dr; tol=1e-12 )
             4.195601852e-2*a8 + 0.6485698427
 
     elseif (r1 <= 2.0)
+        #println("r < 2")
         a6 = asin((1.0/2.0)*sqrt(3.0)*(-3.0+2.0*r1));
         a9 = sqrt(-23.0+36.0*r1-12.0*r2);
 
@@ -32,8 +45,10 @@ function δh( rf, rb , dr; tol=1e-12 )
             8.22848104e-3 + 0.1150173611*a9
 
     elseif (r1 <= 3.0 );
+        #println("r < 3")
         a1 = asin((1.0/2.0*(2.0*r1-5.0))*sqrt(3.0))
         a7 = sqrt(-71.0-12.0*r2+60.0*r1)
+
 
         del_h = 2.083333333e-2*r4 + (3.472222222e-3*a7 -0.2638888889)*r3 +
         (1.214391675 - 2.604166667e-2*a7 + 2.405626122e-2*a1)*r2 +
@@ -65,13 +80,18 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
     nf = 2*nb
 
     supp_idx = -supp:supp;
-    l=supp_idx.+(supp+1); m=supp_idx'.+(supp+1)  # Shift indices to index into "weight" at 1
-    weight = zeros( nf, 2, length(l), length(m) )
+    #l=supp_idx.+(supp+1); m=supp_idx'.+(supp+1)  # Shift indices to index into "weight" at 1
+    weight = zeros( nf, 2, 2*supp+1, 2*supp+1 )
 
     # Nearest indices of body relative to grid
     body_idx = zeros(Int, size(xb))
-    body_idx[:, 1] .= @. Int(round( (xb[:, 1]+grid.offx)/h ))
-    body_idx[:, 2] .= @. Int(round( (xb[:, 2]+grid.offy)/h ))
+    body_idx[:, 1] .= @. Int(floor( (xb[:, 1]+grid.offx)/h ))
+    body_idx[:, 2] .= @. Int(floor( (xb[:, 2]+grid.offy)/h ))
+
+    k, l, m = 1, 6, 5
+
+    x = @. h*(body_idx[k, 1]-1+supp_idx)-grid.offx       # grid location x
+    y = @. h*(body_idx[k, 2]-1+supp_idx')-grid.offy       # grid location y
 
     # get regularized weight near IB points (u-vel points)
     for k=1:nb
@@ -82,6 +102,7 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
         @. weight[k, 2, :, :] = δh(x+h/2, xb[k, 1], h) * δh(y, xb[k, 2], h)
     end
 
+
     " Matrix E' "
     function reg!(q, fb)
         q .*= 0.0
@@ -91,6 +112,7 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
             @views qx[i, j] += weight[k, 1, :, :]*fb[k]
             @views qy[i, j] += weight[k, 2, :, :]*fb[k+nb]
         end
+        return nothing
     end
 
     " Matrix E "
@@ -102,6 +124,7 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
             fb[k]    += sum( weight[k, 1, :, :].*qx[ i, j ] )
             fb[k+nb] += sum( weight[k, 2, :, :].*qy[ i, j ] )
         end
+        return nothing
     end
 
     E = LinearMap( regT!, reg!, nf, grid.nq; ismutating=true  )
