@@ -10,21 +10,21 @@ function get_bc!(rbc, r, fac, grid)
     r = reshape(r, nx-1, ny-1)
 
     # Get interpolated boundary conditions on finer grid
-    i=0:2:nx
-    @. rbc[B+i+1] = r[nx÷4+i÷2,   ny÷4]
-    @. rbc[T+i+1] = r[nx÷4+i÷2, 3*ny÷4]
+    i=(nx÷4).+(0:nx÷2); ibc=1:2:nx+1;
+    @views rbc[B.+ibc] = r[i,   ny÷4]
+    @views rbc[T.+ibc] = r[i, 3*ny÷4]
 
-    i=1:2:nx-1
-    @. rbc[B+i+1] = 0.5*( r[nx÷4+(i+1)÷2,   ny÷4] + r[nx÷4-1+(i+1)÷2,   ny÷4] )
-    @. rbc[T+i+1] = 0.5*( r[nx÷4+(i+1)÷2, 3*ny÷4] + r[nx÷4-1+(i+1)÷2, 3*ny÷4] )
+    i=(nx÷4).+(1:nx÷2); ibc=2:2:nx;
+    @views rbc[B.+ibc] = 0.5*( r[i,   ny÷4] + r[i.-1,   ny÷4] )
+    @views rbc[T.+ibc] = 0.5*( r[i, 3*ny÷4] + r[i.-1, 3*ny÷4] )
 
-    j=0:2:ny
-    @. rbc[L+j+1] = r[  nx÷4, ny÷4+j÷2]
-    @. rbc[R+j+1] = r[3*nx÷4, ny÷4+j÷2]
+    j=(ny÷4).+(0:ny÷2); jbc=1:2:ny+1
+    @views rbc[L.+jbc] = r[  nx÷4, j]
+    @views rbc[R.+jbc] = r[3*nx÷4, j]
 
-    j=1:2:ny-1
-    @. rbc[L+j+1] = 0.5*( r[  nx÷4, ny÷4+(j+1)÷2] + r[  nx÷4, ny÷4-1+(j+1)÷2] )
-    @. rbc[R+j+1] = 0.5*( r[3*nx÷4, ny÷4+(j+1)÷2] + r[3*nx÷4, ny÷4-1+(j+1)÷2] )
+    j=(ny÷4).+(1:ny÷2); jbc=2:2:ny
+    @views rbc[L.+jbc] = 0.5*( r[  nx÷4, j] + r[  nx÷4, j.-1] )
+    @views rbc[R.+jbc] = 0.5*( r[3*nx÷4, j] + r[3*nx÷4, j.-1] )
 
     rbc .*= fac
 
@@ -47,12 +47,12 @@ function apply_bc!(r, rbc, fac, grid)
 
     # add bc's from coarser grid
     i=1:nx-1
-    j=1;    @. r[i,j] += fac*rbc[B+i+1]
-    j=ny-1; @. r[i,j] += fac*rbc[T+i+1]
+    j=1;    @views r[i,j] += fac*rbc[(B+1).+i]
+    j=ny-1; @views r[i,j] += fac*rbc[(T+1).+i]
 
     j=1:ny-1
-    i=1;    @. r[i,j] += fac*rbc[L+j+1]
-    i=nx-1; @. r[i,j] += fac*rbc[R+j+1]
+    i=1;    @views r[i,j] += fac*rbc[(L+1).+j]
+    i=nx-1; @views r[i,j] += fac*rbc[(R+1).+j]
 
     r = reshape(r, grid.nΓ, 1)
 end
@@ -77,40 +77,10 @@ function coarsify!(Γc::AbstractVector,
     jc = ny÷2 .+ ( (-ny÷4+1):(ny÷4-1) )'
     j = 2 .* jc .- ny÷2
 
-    @. Γc[ic, jc] = Γ[i, j] +
-                 0.5*( Γ[i+1,j] + Γ[i,j+1] + Γ[i-1,j] + Γ[i,j-1] ) +
-                0.25*( Γ[i+1,j+1] + Γ[i+1,j-1] + Γ[i-1,j-1] + Γ[i-1,j+1] )
+    @views Γc[ic, jc] = Γ[i, j] +
+                 0.5*( Γ[i.+1,j] + Γ[i,j.+1] + Γ[i.-1,j] + Γ[i,j.-1] ) +
+                0.25*( Γ[i.+1,j.+1] + Γ[i.+1,j.-1] + Γ[i.-1,j.-1] + Γ[i.-1,j.+1] )
 
     Γc = reshape(Γc, grid.nΓ, 1)
     Γ  = reshape(Γ,  grid.nΓ, 1)
 end
-
-
-"""
-FUNCTION coarsify( crhs, rhs ) RESULT( arhs )
-
-  !***************************************************************!
-  !*   given vorticity on a smaller, fine mesh, (rhs) interp.    *!
-  !*   values to the center region of a larger, coarser mesh     *!
-  !*   (crhs).  The values outside the center region are         *!
-  !*   not(? JC) unmodified. Result is placed in arhs                  *!
-  !***************************************************************!
-  REAL(KIND(0.D0)), DIMENSION(:,:)                     :: crhs, rhs
-  REAL(KIND(0.D0)), DIMENSION(SIZE(rhs,1),SIZE(rhs,2)) :: arhs
-  INTEGER                                              :: i,j,indi,indj
-
-  arhs = crhs
-  DO j=-n/4+1,n/4-1
-     indj = n/2+2*j
-     DO i=-m/4+1,m/4-1
-        indi = m/2+2*i
-        arhs(m/2+i,n/2+j) = rhs(indi  ,indj)   + &
-                    0.5d0*( rhs(indi+1,indj)   + rhs(indi  ,indj+1)   + &
-                            rhs(indi-1,indj)   + rhs(indi  ,indj-1) ) + &
-                   0.25d0*( rhs(indi+1,indj+1) + rhs(indi+1,indj-1)   + &
-                            rhs(indi-1,indj-1) + rhs(indi-1,indj+1) )
-      ENDDO
-   ENDDO
-
-END FUNCTION coarsify
-"""

@@ -74,7 +74,8 @@ mutable struct WorkingMemory
     Γ1::AbstractArray
     Γ2::AbstractArray
     Γ3::AbstractArray
-    bc::AbstractArray
+    Γbc::AbstractArray    # Poisson boundary conditions for multigrid
+    rhsbc::AbstractArray  # Time-stepping boundary conditions for multigrid
     function WorkingMemory(grid::Grid)
         work = new()
         work.q1 = zeros(grid.nq, grid.mg)
@@ -84,7 +85,8 @@ mutable struct WorkingMemory
         work.Γ1 = zeros(grid.nΓ, grid.mg)
         work.Γ2 = zeros(grid.nΓ, grid.mg)
         work.Γ3 = zeros(grid.nΓ, grid.mg)
-        work.bc = zeros(grid.nΓ)
+        work.Γbc = zeros(2*(grid.nx+1)+2*(grid.ny+1))
+        work.rhsbc = zeros(grid.nΓ)
         return work
     end
 end
@@ -103,6 +105,7 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
     Uinf::Float64               # Free-stream velocity
     α::Float64                  # Angle of attack
     mats::IBMatrices            # Various precomputed sparse matrices
+    work::WorkingMemory
     XX::Union{Array{Float64, 2}, Nothing}  #  x-locations for computing rotational fluxes
     YY::Union{Array{Float64, 2}, Nothing}  #  y-locations for computing rotational fluxes
     function IBModel(grid::T,
@@ -113,6 +116,7 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
                      xc=0.0,
                      yc=0.0) where {T <: Grid, V <: Body}
         mats = IBMatrices(grid, bodies)
+        work = WorkingMemory(grid)
 
         # TODO: Put in different function??
         "Precompute grid locations for cross products (used for rotational flux)"
@@ -139,6 +143,6 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
         else
             XX, YY = nothing, nothing
         end
-        return new{T, V}(grid, bodies, Float64(Re), Uinf, α, mats, XX, YY)
+        return new{T, V}(grid, bodies, Float64(Re), Uinf, α, mats, work, XX, YY)
     end
 end

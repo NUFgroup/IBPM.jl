@@ -23,7 +23,6 @@ A, Ainv, B, and Binv matrices
 mutable struct IBProblem <: AbstractIBProblem
     model::IBModel
     scheme::ExplicitScheme
-    work::WorkingMemory
     A
     Ainv
     Binv
@@ -37,7 +36,6 @@ mutable struct IBProblem <: AbstractIBProblem
         prob.model = IBModel(grid, bodies, Re; Uinf=Uinf, α=α)
         prob.scheme = AB2(dt)   # Explicit time-stepping for nonlinear terms
         prob.A, prob.Ainv, prob.Binv = get_AB(prob.model, dt)
-        prob.work = WorkingMemory(grid)
         return prob
     end
 end

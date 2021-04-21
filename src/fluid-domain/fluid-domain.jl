@@ -12,6 +12,7 @@ struct UniformGrid <: Grid
     ny::Int
     nΓ::Int
     nq::Int
+    nu::Int
     mg::Int
     offx::Float64
     offy::Float64
@@ -20,6 +21,7 @@ struct UniformGrid <: Grid
     u_idx::Any
     v_idx::Any
     ω_idx::Any
+    split_flux::Any
 end
 
 struct MultiGrid <: Grid
@@ -27,6 +29,7 @@ struct MultiGrid <: Grid
     ny::Int
     nΓ::Int
     nq::Int
+    nu::Int
     mg::Int
     offx::Float64
     offy::Float64
@@ -35,6 +38,7 @@ struct MultiGrid <: Grid
     u_idx::Any
     v_idx::Any
     ω_idx::Any
+    split_flux::Any
     LEFT::Int
     RIGHT::Int
     BOT::Int
@@ -52,14 +56,19 @@ function make_grid(nx::Int, ny::Int, offx::Float64, offy::Float64, len::Float64;
     v(x_idx, y_idx) = @. x_idx + nx*(y_idx-1)' + nu
     ω(x_idx, y_idx) = @. x_idx + (nx-1)*(y_idx-1)'
 
+    "Return a view to 2D arrays of fluxes"
+    split_flux(q) = reshape(@view(q[1:nu]), nx+1, ny), reshape(@view(q[nu+1:end]), nx, ny+1)
+    split_flux(q, lev) = reshape(@view(q[1:nu, lev]), nx+1, ny), reshape(@view(q[nu+1:end, lev]), nx, ny+1)
+
     if mg==1
-        return UniformGrid(nx, ny, nΓ, nq, mg, offx, offy, len, h, u, v, ω)
+        return UniformGrid(nx, ny, nΓ, nq, nu, mg, offx, offy, len, h,
+            u, v, ω, split_flux)
     else
         # Predefine constant offsets for indexing boundary conditions
         left = 0;  right = ny+1
         bot = 2*(ny+1); top = 2*(ny+1) + nx+1
-        return MultiGrid(nx, ny, nΓ, nq, mg, offx, offy, len, h, u, v, ω,
-            left, right, bot, top)
+        return MultiGrid(nx, ny, nΓ, nq, nu, mg, offx, offy, len, h,
+            u, v, ω, split_flux, left, right, bot, top)
     end
 
 end

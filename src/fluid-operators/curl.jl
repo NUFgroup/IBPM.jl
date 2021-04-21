@@ -13,11 +13,13 @@ Transpose of discrete curl (R matrix)
 Γ = rot( q )
 """
 function rot!( Γ, q, grid )
-    u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx
-    #i = 1:grid.nx-1; j = (1:grid.ny-1)'
-    #@. Γ[ω(i, j)] = q[v(i+1, j+1)] - q[v(i, j+1)] - q[u(i+1, j+1)] + q[u(i+1, j)]
-    i = 2:grid.nx; j = (2:grid.ny)'
-    @. Γ[ω(i-1, j-1)] = q[v(i, j)] - q[v(i-1, j)] - q[u(i, j)] + q[u(i, j-1)]
+    u, v = grid.u_idx, grid.v_idx
+    i = 2:grid.nx; j = 2:grid.ny
+    Γ = reshape(Γ, grid.nx-1, grid.ny-1)
+    qx, qy = grid.split_flux(q)
+
+    @views Γ[i.-1, j.-1] = qy[i, j] - qy[i.-1, j] - qx[i, j] + qx[i, j.-1]
+    Γ = reshape(Γ, grid.nΓ, 1)
 end
 
 """
@@ -29,102 +31,64 @@ q = curl( ψ )
 """
 function curl!( q, ψ, grid )
    nx, ny = grid.nx, grid.ny
-   u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx  # Indices to x-flux, y-flux, vorticity/streamfunction
+   u, v = grid.u_idx, grid.v_idx  # Indices to x-flux, y-flux, vorticity/streamfunction
+   ψ = reshape(ψ, grid.nx-1, grid.ny-1)
+   qx, qy = grid.split_flux(q)
 
    # x-fluxes
-   i=2:nx; j=(2:ny-1)'
-   @. q[u(i, j)] = ψ[ω(i-1,j)] - ψ[ω(i-1, j-1)]
-   j=1;  @. q[u(i, j)] =  ψ[ω(i-1, j)]          # Top boundary
-   j=ny; @. q[u(i, j)] = -ψ[ω(i-1, j-1)]        # Bottom boundary
+   i=2:nx; j=2:ny-1
+   @views qx[i, j] = ψ[i.-1,j] - ψ[i.-1, j.-1]
+   j=1;  @views qx[i, j] =  ψ[i.-1, j]      # Top boundary
+   j=ny; @views qx[i, j] = -ψ[i.-1, j.-1]   # Bottom boundary
 
    # y-fluxes
-   i=2:nx-1;  j=(2:ny)'
-   @. q[v(i,j)] = ψ[ω(i-1,j-1)] - ψ[ω(i,j-1)]
-   i=1;  @. q[v(i,j)] = -ψ[ω(i, j-1)]           # Left boundary
-   i=nx; @. q[v(i,j)] =  ψ[ω(i-1, j-1)]         # Right boundary
-end
+   i=2:nx-1;  j=2:ny
+   @views qy[i,j] = ψ[i.-1,j.-1] - ψ[i,j.-1]
+   i=1;  @views qy[i,j] = -ψ[i, j.-1]           # Left boundary
+   i=nx; @views qy[i,j] =  ψ[i.-1, j.-1]        # Right boundary
 
+   ψ = reshape(ψ, grid.nΓ, 1)
+end
 
 function curl!( q, ψ, ψbc, grid::MultiGrid )
     """
     Compute velocity flux from streamfunction.
        Note: requires streamfunction from coarser grid on edge
              of current domain (stored in ψbc)
-
-    ! for multigrid boundary conditions
-    DIMENSION(2*(m+1)+2*(n+1)) :: ψbc
     """
    nx, ny = grid.nx, grid.ny
-   u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx  # Indices to x-flux, y-flux, vorticity/streamfunction
+   u, v = grid.u_idx, grid.v_idx  # Indices to x-flux, y-flux, vorticity/streamfunction
    T, B, L, R = grid.TOP, grid.BOT, grid.LEFT, grid.RIGHT  # Constant offsets for indexing BCs
+   ψ = reshape(ψ, grid.nx-1, grid.ny-1)
+   qx, qy = grid.split_flux(q)
 
    ### x-fluxes
-   i=2:nx; j=(2:ny-1)'
-   @. q[u(i, j)] = ψ[ω(i-1,j)] - ψ[ω(i-1, j-1)]
+   i=2:nx; j=2:ny-1
+   @views qx[i, j] = ψ[i.-1,j] - ψ[i.-1, j.-1]
 
    # Top/bottom boundaries
-   j=1;  @. q[u(i, j)] = ψ[ω(i-1, j)] - ψbc[B+i-1 ]
-   j=ny; @. q[u(i, j)] = ψbc[T+i] - ψ[ω(i-1, j-1)]
+   j=1;  @views qx[i, j] = ψ[i.-1, j] - ψbc[(B-1).+i]
+   j=ny; @views qx[i, j] = ψbc[i.+T] - ψ[i.-1, j.-1]
 
    # Left/right boundaries
-   j=(1:ny)';
-   i=1;     @. q[u(i, j)] = ψbc[L+j+1] - ψbc[L+j]
-   i=nx+1;  @. q[u(i, j)] = ψbc[R+j+1] - ψbc[R+j]
+   j=1:ny;
+   i=1;     @views qx[i, j] = ψbc[(L+1).+j] - ψbc[L.+j]
+   i=nx+1;  @views qx[i, j] = ψbc[(R+1).+j] - ψbc[R.+j]
 
    #### y-fluxes
-   i=2:nx-1;  j=(2:ny)'
-   @. q[v(i,j)] = ψ[ω(i-1,j-1)] - ψ[ω(i,j-1)]
+   i=2:nx-1;  j=2:ny
+   @views qy[i,j] = ψ[i.-1,j.-1] - ψ[i,j.-1]
 
    # Left/right boundaries
-   i=1;  @. q[v(i,j)] = -ψ[ω(i, j-1)] + ψbc[L+j]
-   i=nx; @. q[v(i,j)] = -ψbc[R+j] + ψ[ω(i-1, j-1)]
+   @views i=1;  qy[i,j] = -ψ[i, j.-1][:] + ψbc[L.+j]
+   @views i=nx; qy[i,j] = -ψbc[R.+j] + ψ[i.-1, j.-1][:]
 
    # Top/bottom boundaries
    i=1:nx
-   j=1;    @. q[v(i,j)] = ψbc[B+i] - ψbc[B+i+1]
-   j=ny+1; @. q[v(i,j)] = ψbc[T+i] - ψbc[T+i+1]
-end
+   j=1;    @views qy[i,j] = ψbc[B.+i] - ψbc[(B+1).+i]
+   j=ny+1; @views qy[i,j] = ψbc[T.+i] - ψbc[(T+1).+i]
 
-
-
-function curl!( q, ψ, ψc, grid::MultiGrid )
-    """
-    Compute velocity flux from streamfunction.
-       Note: requires streamfunction from coarser grid on edge
-             of current domain (stored in ψc)
-
-    ! for multigrid boundary conditions
-    DIMENSION(2*(m+1)+2*(n+1)) :: ψbc
-    """
-   nx, ny = grid.nx, grid.ny
-   u, v, ω = grid.u_idx, grid.v_idx, grid.ω_idx  # Indices to x-flux, y-flux, vorticity/streamfunction
-   T, B, L, R = grid.TOP, grid.BOT, grid.LEFT, grid.RIGHT  # Constant offsets for indexing BCs
-
-   ### x-fluxes
-   i=2:nx; j=(2:ny-1)'
-   @. q[u(i, j)] = ψ[ω(i-1,j)] - ψ[ω(i-1, j-1)]
-
-   # Top/bottom boundaries
-   j=1;  @. q[u(i, j)] = ψ[ω(i-1, j)] - ψbc[B+i-1 ]
-   j=ny; @. q[u(i, j)] = ψbc[T+i] - ψ[ω(i-1, j-1)]
-
-   # Left/right boundaries
-   j=(1:ny)';
-   i=1;     @. q[u(i, j)] = ψbc[L+j+1] - ψbc[L+j]
-   i=nx+1;  @. q[u(i, j)] = ψbc[R+j+1] - ψbc[R+j]
-
-   #### y-fluxes
-   i=2:nx-1;  j=(2:ny)'
-   @. q[v(i,j)] = ψ[ω(i-1,j-1)] - ψ[ω(i,j-1)]
-
-   # Left/right boundaries
-   i=1;  @. q[v(i,j)] = -ψ[ω(i, j-1)] + ψbc[L+j]
-   i=nx; @. q[v(i,j)] = -ψbc[R+j] + ψ[ω(i-1, j-1)]
-
-   # Top/bottom boundaries
-   i=1:nx
-   j=1;    @. q[v(i,j)] = ψbc[B+i] - ψbc[B+i+1]
-   j=ny+1; @. q[v(i,j)] = ψbc[T+i] - ψbc[T+i+1]
+   ψ = reshape(ψ, grid.nΓ, 1)
 end
 
 """
@@ -159,6 +123,8 @@ function vort2flux!( ψ::AbstractArray,
                      ngrids::Int )
    grid = model.grid
    nx, ny = grid.nx, grid.ny
+   ψbc = model.work.Γbc  # Same shape for both boundary conditions
+   Γwork = @view(model.work.Γ3[:, 1])  # Working memory
 
    #println("=== VORT2FLUX ===")
    # Interpolate values from finer grid to center region of coarse grid
@@ -169,69 +135,17 @@ function vort2flux!( ψ::AbstractArray,
    # Invert Laplacian on largest grid
    ψ .*= 0.0
 
-   # TODO: In place??
-   ψ[:, ngrids] = model.mats.Δinv * Γ[:, ngrids]    # Δψ = Γ
-   @views curl!(q[:, ngrids], ψ[:, ngrids], grid )  # q = ∇×ψ
-
-   # Telescope in to finer grids
-   for lev=(ngrids-1):-1:1
-      # TODO REDO WITHOUT ALLOCATION
-      Γ̃ = copy(Γ[:, lev])
-
-      @views get_bc!(ψbc, ψ[:, lev+1], 1.0, grid)
-      @views apply_bc!(Γ̃, ψbc, 1.0, grid)
-
-      # TODO: In place??
-      ψ[:, lev] = model.mats.Δinv * Γ̃             # Δψ = Γ
-
-      if ngrids >= lev
-         @views curl!(q[:, lev], ψ[:, lev], ψbc, grid )   # q = ∇×ψ
-      end
-   end
-
-   #println(sum(q.^2))
-   #sleep(100)
-end
-
-
-
-
-function vort2flux_OLD!( ψ::AbstractArray,
-                     q::AbstractArray,
-                     Γ::AbstractArray,
-                     model::IBModel{MultiGrid, <:Body},
-                     ngrids::Int )
-   grid = model.grid
-   nx, ny = grid.nx, grid.ny
-
-   # TODO: PREALLOCATE
-   ψbc = zeros(2*(nx+1) + 2*(ny+1))   # Streamfunction boundary conditions
-
-   #println("=== VORT2FLUX ===")
-   # Interpolate values from finer grid to center region of coarse grid
-   for lev=2:ngrids
-      @views coarsify!( Γ[:, lev], Γ[:, lev-1], grid);
-   end
-
-   # Invert Laplacian on largest grid
-   ψ .*= 0.0
-
-   # TODO: In place??
-   ψ[:, ngrids] = model.mats.Δinv * Γ[:, ngrids]             # Δψ = Γ
+   @views mul!(ψ[:, ngrids], model.mats.Δinv, Γ[:, ngrids])  # Δψ = Γ
    @views curl!(q[:, ngrids], ψ[:, ngrids], ψbc, grid )      # q = ∇×ψ
 
    # Telescope in to finer grids
    for lev=(ngrids-1):-1:1
-      # TODO REDO WITHOUT ALLOCATION
-      Γ̃ = copy(Γ[:, lev])
-
+      Γwork .= Γ[:, lev]
       @views get_bc!(ψbc, ψ[:, lev+1], 1.0, grid)
-      @views apply_bc!(Γ̃, ψbc, 1.0, grid)
+      @views apply_bc!(Γwork, ψbc, 1.0, grid)
 
-      # TODO: In place??
-      ψ[:, lev] = model.mats.Δinv * Γ̃             # Δψ = Γ
-
-      if ngrids >= lev
+      @views mul!(ψ[:, lev], model.mats.Δinv, Γwork)   # Δψ = Γ
+      if lev < ngrids
          @views curl!(q[:, lev], ψ[:, lev], ψbc, grid )   # q = ∇×ψ
       end
    end

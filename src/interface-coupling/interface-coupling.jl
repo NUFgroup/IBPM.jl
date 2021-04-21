@@ -64,8 +64,8 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
     nb = size(xb, 1)
     nf = 2*nb
 
-    x_idx = -supp:supp; y_idx = (-supp:supp)'
-    l=x_idx.+(supp+1); m=y_idx.+(supp+1)  # Shift indices to index into "weight" at 1
+    supp_idx = -supp:supp;
+    l=supp_idx.+(supp+1); m=supp_idx'.+(supp+1)  # Shift indices to index into "weight" at 1
     weight = zeros( nf, 2, length(l), length(m) )
 
     # Nearest indices of body relative to grid
@@ -75,8 +75,8 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
 
     # get regularized weight near IB points (u-vel points)
     for k=1:nb
-        x = @. h*(body_idx[k, 1]-1+x_idx)-grid.offx       # grid location x
-        y = @. h*(body_idx[k, 2]-1+y_idx)-grid.offy       # grid location y
+        x = @. h*(body_idx[k, 1]-1+supp_idx)-grid.offx       # grid location x
+        y = @. h*(body_idx[k, 2]-1+supp_idx')-grid.offy       # grid location y
 
         @. weight[k, 1, :, :] = δh(x, xb[k, 1], h) * δh(y+h/2, xb[k, 2], h)
         @. weight[k, 2, :, :] = δh(x+h/2, xb[k, 1], h) * δh(y, xb[k, 2], h)
@@ -85,76 +85,25 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
     " Matrix E' "
     function reg!(q, fb)
         q .*= 0.0
+        qx, qy = grid.split_flux(q)
         for k=1:nb
-            i=body_idx[k, 1].+x_idx; j=body_idx[k, 2].+y_idx
-            @. q[grid.u_idx(i, j)] += weight[k, 1, :, :]*fb[k]
-            @. q[grid.v_idx(i, j)] += weight[k, 2, :, :]*fb[k+nb]
+            i=body_idx[k, 1].+supp_idx; j=body_idx[k, 2].+supp_idx
+            @views qx[i, j] += weight[k, 1, :, :]*fb[k]
+            @views qy[i, j] += weight[k, 2, :, :]*fb[k+nb]
         end
     end
 
     " Matrix E "
     function regT!(fb, q)
         fb .*= 0.0
+        qx, qy = grid.split_flux(q)
         for k=1:nb
-            i=body_idx[k, 1].+x_idx; j=body_idx[k, 2].+y_idx
-            fb[k]    += sum( @. weight[k, 1, :, :]*q[ grid.u_idx(i, j) ] )
-            fb[k+nb] += sum( @. weight[k, 2, :, :]*q[ grid.v_idx(i, j) ] )
+            i=body_idx[k, 1].+supp_idx; j=body_idx[k, 2].+supp_idx
+            fb[k]    += sum( weight[k, 1, :, :].*qx[ i, j ] )
+            fb[k+nb] += sum( weight[k, 2, :, :].*qy[ i, j ] )
         end
     end
 
     E = LinearMap( regT!, reg!, nf, grid.nq; ismutating=true  )
-    return E
-end
-
-
-
-
-"""
-Return the interpolation matrix E, which interpolates flow quantities
-to the immersed boundary.  This depends on the position of the body points,
-but not their velocities
-
-The transpose of E is the regularization matrix which smears quantities
-from the IB to the flow domain.
-"""
-function setup_reg_NEW( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
-    nx = grid.nx; ny = grid.ny; h = grid.h;  # Size of uniform grid cell
-    offset = [grid.offx grid.offy];  # size (1, 2) array for broadcasting
-
-    # Stack all body points together... don't need to distinguish them here
-    xb = vcat( [body.xb for body in bodies]...)
-    nb = size(xb, 1)
-
-    x_idx = reshape(-supp:supp, 1, 2*supp+1, 1);
-    y_idx = reshape(-supp:supp, 1, 1, 2*supp+1);
-
-    # Nearest indices of body relative to grid
-    body_idx = @. Int(round( (xb+offset)/h ))  # size (xb, 2)
-
-    # Nearby x- and y-locations to body
-    x = @. h*(body_idx[:, 1] - 1+x_idx) - offset[1]  # nearby x-locations (nb, 2*supp+1, 1)
-    y = @. h*(body_idx[:, 2] - 1+y_idx) - offset[2]  # nearby y-locations (xb, 1, 2*supp+1)
-
-    weight = zeros( nb, 2, length(x_idx), length(y_idx) )
-    @. weight[:, 1, :, :] = δh(x, xb[:, 1], h) * δh(y+h/2, xb[:, 2], h)
-    @. weight[:, 2, :, :] = δh(x+h/2, xb[:, 2], h) * δh(y, xb[:, 2], h)
-
-    " Matrix E transpose "
-    function reg!(q, fb)
-        q .*= 0.0
-        i = body_idx[:, 1].+x_idx; j = body_idx[:, 2].+y_idx;
-        q[grid.u_idx.(i, j)] .+= sum( @. weight[:, 1, :, :]*fb[1:nb]; dims=1)     # x-locations
-        q[grid.v_idx.(i, j)] .+= sum( @. weight[:, 2, :, :]*fb[nb+1:end]; dims=1) # y-locations
-    end
-
-    " Matrix E "
-    function regT!(fb, q)
-        fb .*= 0.0
-        i = body_idx[:, 1].+x_idx; j = body_idx[:, 2].+y_idx
-        fb[1:nb]     .+= sum( @. weight[:, 1, :, :]*q[ grid.u_idx(i, j) ]; dims=(2, 3) )[:, 1, 1]
-        fb[nb+1:end] .+= sum( @. weight[:, 2, :, :]*q[ grid.v_idx(i, j) ]; dims=(2, 3) )[:, 1, 1]
-    end
-
-    E = LinearMap( regT!, reg!, 2*nb, grid.nq; ismutating=true  )
     return E
 end

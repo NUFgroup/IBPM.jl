@@ -81,14 +81,13 @@ function get_Binv(model::IBModel{<:Grid, RigidBody{T}} where T <: Motion, Ainv::
     e = zeros( nftot );         # Unit vector
 
     b = zeros( nftot );         # Working array
+
     Γ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for circulation
     ψ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for streamfunction
     q = zeros(model.grid.nq, model.grid.mg)    # Working array for velocity flux
 
     for j = 1 : nftot
-        e .*= 0.0
-        e[j] = 1.0;
-
+        e .*= 0.0; e[j] = 1.0;  # Construct unit vector
         B_times!( b, e, Ainv, model, Γ, ψ, q );
         B[:, j] = b
     end
