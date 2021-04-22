@@ -116,17 +116,8 @@ function curl!( q, ψ, ψbc, grid::MultiGrid )
 end
 
 """
-    vort2flux!( ψ, q, Γ, model::IBModel{UniformGrid, <:Body} )
-"""
-function vort2flux!( ψ, q, Γ, model::IBModel{UniformGrid, <:Body} )
-    mul!(ψ, model.mats.Δinv, Γ)     # Solve Poisson problem for streamfunction
-    mul!(q, model.mats.C, ψ)          # q = ∇ x ψ
+    vort2flux!( ψ, q, Γ, model, ngrids )
 
-    return nothing
-end
-
-
-"""
 !***************************************************************!
 !*    Multiscale method to solve C^T C s = omega               *!
 !*    and return the velocity, C s.                            *!

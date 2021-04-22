@@ -92,18 +92,6 @@ end
 
 "Initialize irrotational freestream flux when not time-varying"
 function base_flux!(::Type{T} where T <: InertialMotion,
-                    state::IBState{UniformGrid},
-                    prob::IBProblem,
-                    t::Float64)
-    grid = prob.model.grid
-    Uinf, α = prob.model.Uinf, prob.model.α
-    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
-    state.q0[ 1:nu ] .= Uinf * grid.h * cos(α);  # x-flux
-    state.q0[ nu+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
-end
-
-"Initialize irrotational freestream flux when not time-varying"
-function base_flux!(::Type{T} where T <: InertialMotion,
                     state::IBState{MultiGrid},
                     prob::IBProblem,
                     t::Float64)
@@ -118,40 +106,6 @@ function base_flux!(::Type{T} where T <: InertialMotion,
         state.q0[ 1:nu, lev ] .= Uinf * hc * cos(α);      # x-flux
         state.q0[ nu+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
     end
-end
-
-"Update time-varying background flux for moving grid"
-function base_flux!(::Type{MovingGrid},
-                    state::IBState{UniformGrid},
-                    prob::IBProblem,
-                    t::Float64)
-    @assert length(prob.model.bodies) == 1 # Assumes only one body
-    grid = prob.model.grid
-    XX, YY = prob.model.XX, prob.model.YY;
-    motion = prob.model.bodies[1].motion
-    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
-    nq = grid.nq
-
-    ### Rotational part
-    Ω = -motion.θ̇(t)
-    α = -motion.θ(t)
-    nx, ny, h = grid.nx, grid.ny, grid.h;
-
-    ### x-flux
-    #state.q0[1:nu, 1] .= -h*Ω*YY[:]
-    @views state.q0[1:nu] .= YY[:]
-    @views state.q0[1:nu] .*= -h*Ω
-
-    ### y-flux
-    #state.q0[nu+1:end, 1] .= h*Ω*XX[:]
-    @views state.q0[(nu+1):end] .= XX[:]
-    @views state.q0[nu+1:nq] .*= h*Ω
-
-    ### Potential flow part
-    Ux0 = motion.U(t)*cos(α)
-    Uy0 = motion.U(t)*sin(α)
-    @views state.q0[1:nu, 1] .+= h*Ux0          # x-flux
-    @views state.q0[nu+1:nq, 1] .+= h*Uy0  # y-velocity
 end
 
 "Update time-varying background flux for moving grid"

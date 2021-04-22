@@ -66,15 +66,6 @@ end
     return I - (dt/(2*model.Re*h^2))*(C'C)
 end"""
 
-function get_AB(model::IBModel{UniformGrid, <:Body}, dt::Float64)
-    A = get_A(model, dt, model.grid.h)
-    Ainv = get_Ainv(model, dt, model.grid.h)
-    Binv = get_Binv(model, Ainv)
-    return A, Ainv, Binv
-end
-
-
-
 function get_AB(model::IBModel{MultiGrid, <:Body}, dt::Float64)
     hc = [model.grid.h * 2^(lev-1) for lev=1:model.grid.mg]
     A = [get_A(model, dt, h) for h in hc]
@@ -113,33 +104,6 @@ function get_Binv(model::IBModel{<:Grid, RigidBody{T}} where T <: Motion, Ainv::
     return inv(B)
 end
 
-"""
-%Performs one matrix multiply of B*z, where B is the matrix used to solve
-%for the surface stresses that enforce the no-slip boundary condition.
-% (B arises from an LU factorization of the full system)
-Note ψ is just a dummy work array for circ2_st_vflx
-"""
-function B_times!(x::Array{Float64, 1},
-                  z::Array{Float64, 1},
-                  Ainv::LinearMap,
-                  model::IBModel{UniformGrid, RigidBody{T}} where T<:Motion,
-                  Γ::Array{Float64, 2},
-                  ψ::Array{Float64, 2},
-                  q::Array{Float64, 2})
-    E, C = model.mats.E, model.mats.C
-
-    # Get circulation from surface stress
-    mul!(Γ, Ainv, (E*C)'*z)  # Γ = ∇ x (E'*fb)
-
-    #-- get vel flux q from circulation
-    vort2flux!( ψ, q, Γ, model );
-
-    #--Interpolate onto the body
-    @views mul!(x, E, q[:, 1])
-end
-
-
-
 function B_times!(x::Array{Float64, 1},
                   z::Array{Float64, 1},
                   Ainv::LinearMap,
@@ -160,7 +124,7 @@ function B_times!(x::Array{Float64, 1},
 
     # Get circulation from surface stress
     Γ[:, 1] = Ainv * ( (E*C)'*z )    # Γ = ∇ x (E'*fb)
-    
+
     #-- get vel flux from circulation
     vort2flux!( ψ, q, Γ, model, model.grid.mg );
 

@@ -55,11 +55,26 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1, body, Δt,
     return runtime
 end
 
+"""
+    compute_cfl(state, prob)
+
+Compute the CFL number (uΔt/Δx) based on the fine-grid flux
+
+Note that this uses working memory that is also used in `nonlinear!`
+"""
+function compute_cfl(state, prob)
+	Δt, Δx = prob.scheme.dt, prob.model.grid.h
+	qwork = prob.model.work.q5
+	@views @. qwork = abs( state.q[:, 1] )
+	return maximum(qwork)*Δt/Δx
+end
+
 function run_sim(t, state, prob; output=1, callback=(state, prob)->nothing)
 	for i=1:length(t)
 		ibpm.advance!(state, prob, t[i])
         if mod(i,output) == 0
 			callback(state, prob);  # Primitive callback, can be used for plotting or other output
+			state.cfl = compute_cfl(state, prob)
             @show (t[i], state.CD, state.CL, state.cfl)
         end
 	end

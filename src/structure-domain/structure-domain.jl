@@ -89,13 +89,3 @@ function move_body!(
         @views body.ub[i, :] .= se2.vel .+ se2.Ru*body.x0[i, :]
     end
 end
-
-
-# TODO: DO WE NEED THIS?? SEEMS LIKE MAYBE NOT...
-function move_body!(
-    ::Type{MovingGrid},
-    body::RigidBody,
-    t::Float64
-    )
-    body.ub .*= 0.0
-end

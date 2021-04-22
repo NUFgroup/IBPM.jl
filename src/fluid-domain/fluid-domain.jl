@@ -7,19 +7,6 @@ MOVE TO fluid-domain??
 """
 abstract type Grid end
 
-struct UniformGrid <: Grid
-    nx::Int
-    ny::Int
-    nΓ::Int
-    nq::Int
-    mg::Int
-    offx::Float64
-    offy::Float64
-    len::Float64
-    h::Float64
-    split_flux::Any
-end
-
 struct MultiGrid <: Grid
     nx::Int
     ny::Int
@@ -43,20 +30,13 @@ function make_grid(nx::Int, ny::Int, offx::Float64, offy::Float64, len::Float64;
     nq = nu + nv;  # Total num of vel (flux) points
     h = len / nx;  # Grid spacing
 
-    "Return a view to 2D arrays of fluxes"
-    #split_flux(q) = reshape(@view(q[1:nu]), nx+1, ny), reshape(@view(q[nu+1:end]), nx, ny+1)
+    "Return views to 2D arrays of fluxes"
     split_flux(q; lev=1) = reshape(@view(q[1:nu, lev]), nx+1, ny),
                            reshape(@view(q[nu+1:end, lev]), nx, ny+1)
 
-    if mg==1
-        return UniformGrid(nx, ny, nΓ, nq, mg, offx, offy, len, h,
-            split_flux)
-    else
-        # Predefine constant offsets for indexing boundary conditions
-        left = 0;  right = ny+1
-        bot = 2*(ny+1); top = 2*(ny+1) + nx+1
-        return MultiGrid(nx, ny, nΓ, nq, mg, offx, offy, len, h,
-            split_flux, left, right, bot, top)
-    end
-
+    # Predefine constant offsets for indexing boundary conditions
+    left = 0;  right = ny+1
+    bot = 2*(ny+1); top = 2*(ny+1) + nx+1
+    return MultiGrid(nx, ny, nΓ, nq, mg, offx, offy, len, h,
+        split_flux, left, right, bot, top)
 end
