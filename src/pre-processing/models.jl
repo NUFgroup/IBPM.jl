@@ -40,7 +40,9 @@ mutable struct IBMatrices
         mats.Λ = lap_eigs(grid)
 
         # Plan DST for inverse Laplacian
-        mats.dst_plan = get_dst_plan(ones(Float64, grid.nx-1, grid.ny-1));
+        #  Have to do this separately for every grid level because of FFT alignment issue
+        Γtemp = ones(Float64, grid.nΓ, grid.mg)
+        mats.dst_plan = get_dst_plan(ones(grid.nx-1, grid.ny-1))
         mats.Δinv = get_lap_inv(grid, mats.Λ, mats.dst_plan)
 
         # Interpolation/regularization matrix

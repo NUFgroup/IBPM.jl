@@ -99,28 +99,32 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
         @. weight[k, 1, :, :] = δh(x, xb[k, 1], h) * δh(y+h/2, xb[k, 2], h)
         @. weight[k, 2, :, :] = δh(x+h/2, xb[k, 1], h) * δh(y, xb[k, 2], h)
     end
-    
+
     " Matrix E' "
     function reg!(q, fb)
         q .*= 0.0
+        fb = reshape(fb, nb, 2)
         qx, qy = grid.split_flux(q)
         for k=1:nb
             i=body_idx[k, 1].+supp_idx; j=body_idx[k, 2].+supp_idx
-            @views qx[i, j] += weight[k, 1, :, :]*fb[k]
-            @views qy[i, j] += weight[k, 2, :, :]*fb[k+nb]
+            @views qx[i, j] += weight[k, 1, :, :]*fb[k, 1]
+            @views qy[i, j] += weight[k, 2, :, :]*fb[k, 2]
         end
+        fb = reshape(fb, 2*nb, 1)
         return nothing
     end
 
     " Matrix E "
     function regT!(fb, q)
         fb .*= 0.0
+        fb = reshape(fb, nb, 2)
         qx, qy = grid.split_flux(q)
         for k=1:nb
             i=body_idx[k, 1].+supp_idx; j=body_idx[k, 2].+supp_idx
-            fb[k]    += sum( weight[k, 1, :, :].*qx[ i, j ] )
-            fb[k+nb] += sum( weight[k, 2, :, :].*qy[ i, j ] )
+            fb[k, 1] += sum( weight[k, 1, :, :].*qx[ i, j ] )
+            fb[k, 2] += sum( weight[k, 2, :, :].*qy[ i, j ] )
         end
+        fb = reshape(fb, 2*nb, 1)
         return nothing
     end
 

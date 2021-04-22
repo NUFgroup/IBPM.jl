@@ -9,9 +9,9 @@ end
 
 function get_dst_plan(b)
     # Generate plans needed for optimized DST inversion
-    #p = FFTW.plan_r2r(b, FFTW.RODFT00, [1, 2]; flags=FFTW.EXHAUSTIVE)
+    p = FFTW.plan_r2r(b, FFTW.RODFT00, [1, 2]; flags=FFTW.EXHAUSTIVE)
     # I think the NaN errors come from the UNALIGNED flag...
-    p = FFTW.plan_r2r(b, FFTW.RODFT00, [1, 2]; flags=FFTW.UNALIGNED)
+    #p = FFTW.plan_r2r(b, FFTW.RODFT00, [1, 2]; flags=FFTW.UNALIGNED)
 
     # Preallocated work array
     w = zeros(size(b))
@@ -19,8 +19,6 @@ function get_dst_plan(b)
     return p, w
 end
 
-# Original:    8.409 ms (264 allocations: 11.85 MiB)
-# 2D:          5.323 ms (128 allocations: 4.56 MiB)
 function dst_inv(b, Λ)
     return dst( dst(b) ./Λ' )
     #return dst( transpose( dst( dst( transpose( dst( b ) ) ) ./ Λ ) ) )

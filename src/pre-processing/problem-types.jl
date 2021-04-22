@@ -52,8 +52,8 @@ mutable struct IBState{T<:Grid} <: State
     Γ::Array{Float64, 2}     # Circulation
     ψ::Array{Float64, 2}     # Streamfunction
     nonlin::Array{Array{Float64, 2}, 1}  # Memory of nonlinear terms
-    fb::Array{Array{Float64, 1}, 1}          # Surface stresses
-    F̃b::Array{Float64, 1}                    # Body forces * dt
+    fb::Array{Array{Float64, 2}, 1}          # Surface stresses
+    F̃b::Array{Float64, 2}                    # Body forces * dt
     CD::Array{Float64, 1}    # Drag coefficient
     CL::Array{Float64, 1}    # Lift coefficient
     cfl::Float64
@@ -68,8 +68,8 @@ mutable struct IBState{T<:Grid} <: State
         state.Γ  = zeros(grid.nΓ, grid.mg)    # Circulation
         state.ψ  = zeros(grid.nΓ, grid.mg)    # Streamfunction
         state.nonlin = [zeros(grid.nΓ, grid.mg) for i=1:length(prob.scheme.β)]
-        state.fb = [zeros(nf[i]) for i=1:length(nf)]
-        state.F̃b = zeros(sum(nf))
+        state.fb = [zeros(nb[i], 2) for i=1:length(nf)]
+        state.F̃b = zeros(sum(nf), 1)
         state.CD = zeros(length(prob.model.bodies))
         state.CL = zeros(length(prob.model.bodies))
         state.cfl, state.slip = 0.0, 0.0

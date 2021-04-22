@@ -25,14 +25,18 @@ function get_lap_inv( grid::T,
                       Λ::Array{Float64, 2},
                       dst_plan::Tuple{Any, Array{Float64, 2}}) where T <: Grid
     nx, ny = grid.nx, grid.ny
-    # give output in same size as input b (before being reshaped)
 
+    # To avoid alignment issues with FFT plan, copy data to/from a working array
+    #notaligned(x) = mod(UInt(pointer(x)), 16) == 0  # Test alignment
+    b_temp = zeros(Float64, grid.nx-1, grid.ny-1)  # Input
+    x_temp = zeros(Float64, grid.nx-1, grid.ny-1)  # Output
+
+    # Solve Ax = b for x
     return LinearMap(grid.nΓ; issymmetric=true, ismutating=true) do x, b
         # reshape for inversion in fourier space
-        b = reshape( b, nx-1, ny-1)
-        x = reshape( x, nx-1, ny-1)
-        dst_inv!(x, b, Λ, dst_plan; scale=1/(4*nx*ny)); # Include scale to make fwd/inv transforms equal
-        x = reshape( x, (nx-1)*(ny-1), 1 )
+        b_temp .= reshape( b, grid.nx-1, grid.ny-1)
+        dst_inv!(x_temp, b_temp, Λ, dst_plan; scale=1/(4*nx*ny)); # Include scale to make fwd/inv transforms equal
+        x .= reshape( x_temp, size(x) )
         return nothing
     end
 end

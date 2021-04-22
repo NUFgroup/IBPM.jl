@@ -109,10 +109,7 @@ Solve the Poisson equation (25) in Colonius & Taira (2008).
 Dispatch based on the type of motion in the problem - allows precomputing
     regularization and interpolation where possible.
 """
-function boundary_forces!(F̃b::AbstractVector,
-                          qs::AbstractVector,
-                          q0::AbstractVector,
-                          prob::AbstractIBProblem)
+function boundary_forces!(F̃b, qs, q0, prob)
     boundary_forces!( MotionType(prob.model.bodies), F̃b, qs, q0, prob)
 
     return nothing
@@ -128,10 +125,7 @@ Solve modified Poisson problem for uB = 0 and bc2 = 0
 ```
 """
 function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
-                          F̃b::AbstractVector,
-                          qs::AbstractVector,
-                          q0::AbstractVector,
-                          prob::AbstractIBProblem)
+                          F̃b, qs, q0, prob)
     Q = prob.model.work.q2  # Net flux
 
     broadcast!(+, Q, qs, q0)        # qs + q0
@@ -153,10 +147,7 @@ Bf̃ = Eq - ub
 ```
 """
 function boundary_forces!(::Type{RotatingCyl},
-                          F̃b::AbstractVector,
-                          qs::AbstractVector,
-                          q0::AbstractVector,
-                          prob::AbstractIBProblem)
+                          F̃b, qs, q0, prob)
     # Working memory for in-place operations (small allocation)
     F̃work = similar(F̃b)
     Q = prob.model.work.q2   # Net flux
@@ -179,8 +170,8 @@ Dispatch based on the type of motion in the problem.
 This allows precomputing regularization and interpolation where possible.
 """
 function project_circ!(Γs::AbstractArray,
-                     state::IBState,
-                     prob::IBProblem)
+                       state::IBState,
+                       prob::IBProblem)
     project_circ!(MotionType(prob.model.bodies), Γs, state, prob)
     return nothing
 end
@@ -198,7 +189,7 @@ function project_circ!(::Type{V} where V<:Motion,
 
     # Low-level version:
     state.Γ .= Γs
-    @views mul!( Γs[:, 1], (E*C)', state.F̃b)  # Γ = ∇ x (E'*fb)
+    @views mul!( Γs[:, 1], (E*C)', state.F̃b[:])  # Γ = ∇ x (E'*fb)
     @views mul!( Γwork, prob.Ainv[1], Γs[:, 1])
 
     state.Γ[:, 1] .-= Γwork
@@ -218,22 +209,24 @@ function update_stress!(state::IBState,
     nb, nf = get_body_info(prob.model.bodies)
     h = prob.model.grid.h
     dt = prob.scheme.dt
+    state.F̃b = reshape(state.F̃b, sum(nb), 2)
 
     # Store surface stress and integrated forces
     nbod_tally = 0; #  Used to keep a tally of which body we're on
     for j = 1 : length(prob.model.bodies)
         ds = prob.model.bodies[j].ds
         # surface stresses
-        state.fb[j] .= state.F̃b[nbod_tally .+ (1:nf[j])] *(h / dt) ./ [ds; ds] ;
+        state.fb[j] .= state.F̃b[nbod_tally .+ (1:nb[j]), :] *(h / dt) ./ [ds ds] ;
 
         # integrated forces
-        state.CD[j] = 2 * sum( ds .* state.fb[j][1 : nb[j]] ) ;
-        state.CL[j] = 2 * sum( ds .* state.fb[j][1 .+ nb[j] : nf[j] ] ) ;
+        state.CD[j] = 2 * sum( ds .* state.fb[j][:, 1] ) ;
+        state.CL[j] = 2 * sum( ds .* state.fb[j][:, 2] ) ;
 
         # update body index
-        nbod_tally += nf[j];
+        nbod_tally += nb[j];
     end
 
+    state.F̃b = reshape(state.F̃b, 2*sum(nb), 1)
     return nothing
 end
 

@@ -145,15 +145,17 @@ function vort2flux!( ψ, q, Γ, model::IBModel{MultiGrid, <:Body},
    # Invert Laplacian on largest grid with zero boundary conditions
    ψ .*= 0.0; ψbc .*= 0.0
    @views mul!(ψ[:, ngrids], model.mats.Δinv, Γ[:, ngrids])  # Δψ = Γ
-   @views curl!(q[:, ngrids], ψ[:, ngrids], ψbc, grid )      # q = ∇×ψ
+   @views curl!(q[:, ngrids], ψ[:, ngrids], ψbc, grid )              # q = ∇×ψ
 
    # Telescope in to finer grids, using boundary conditions from coarser
    for lev=(ngrids-1):-1:1
-      Γwork .= Γ[:, lev]
+      @views Γwork .= Γ[:, lev]
       @views get_bc!(ψbc, ψ[:, lev+1], grid)
       @views apply_bc!(Γwork, ψbc, 1.0, grid)
 
-      @views mul!(ψ[:, lev], model.mats.Δinv, Γwork)      # Δψ = Γ
+      #println(lev)
+
+      @views mul!(ψ[:, lev], model.mats.Δinv, Γwork) # Δψ = Γ
       if lev < ngrids
          @views curl!(q[:, lev], ψ[:, lev], ψbc, grid )   # q = ∇×ψ
       end
