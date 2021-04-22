@@ -40,4 +40,4 @@ anim = ibpm.animated_sim(t, state, prob; output=20) do state, prob
         ibpm.plot_cyl(prob.model.bodies[1]);
 end
 
-gif(anim, "examples/cyl_100.gif", fps=30)
+gif(anim, "examples/cyl_100.gif", fps=10)
