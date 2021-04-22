@@ -3,6 +3,7 @@
 Some demonstrations of basic functionality
 
 ### Re=100 cylinder wake
+![Cylinder wake](cyl_100.gif)
 
 ### Oscillating plate
 
