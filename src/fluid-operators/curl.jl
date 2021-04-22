@@ -44,7 +44,9 @@ This is wrapped into a LinearMap, so call with
 
 q = C * ψ
 
-where C is in the IBMatrices struct
+where C is in the IBMatrices struct.  Note that this doesn't actualy get
+   used in the MultiGrid formulation, but it is the adjoint to `rot`, which
+   does get called.  See below for the MultiGrid version of curl.
 """
 function curl!( q, ψ, grid )
    nx, ny = grid.nx, grid.ny
@@ -68,13 +70,15 @@ function curl!( q, ψ, grid )
     return nothing
 end
 
+"""
+    curl!( q, ψ, ψbc, grid )
 
+Compute velocity flux from streamfunction on MultiGrid.
+
+Note: requires streamfunction from coarser grid on edge
+       of current domain (stored in ψbc)
+"""
 function curl!( q, ψ, ψbc, grid::MultiGrid )
-   """
-   Compute velocity flux from streamfunction.
-    Note: requires streamfunction from coarser grid on edge
-          of current domain (stored in ψbc)
-   """
    nx, ny = grid.nx, grid.ny
    T, B, L, R = grid.TOP, grid.BOT, grid.LEFT, grid.RIGHT  # Constant offsets for indexing BCs
    ψ = reshape(ψ, grid.nx-1, grid.ny-1)
@@ -93,7 +97,7 @@ function curl!( q, ψ, ψbc, grid::MultiGrid )
    i=1;     @views broadcast!(-, qx[i, j], ψbc[(L+1).+j], ψbc[L.+j])
    i=nx+1;  @views broadcast!(-, qx[i, j], ψbc[(R+1).+j], ψbc[R.+j])
 
-   #### y-fluxes
+   ### y-fluxes
    i=2:nx-1;  j=2:ny
    @views broadcast!(-, qy[i,j], ψ[i.-1,j.-1], ψ[i,j.-1])
 
@@ -140,31 +144,25 @@ function vort2flux!( ψ, q, Γ, model::IBModel{MultiGrid, <:Body},
    grid = model.grid
    nx, ny = grid.nx, grid.ny
    ψbc = model.work.Γbc  # Same shape for both boundary conditions
-   #Γwork = @view(model.work.Γ3[:, 1])  # Working memory
    Γwork = model.work.Γ3  # Working memory
 
-   #println("=== INSIDE VORT2FLUX ===")
-
-   # Interpolate values from finer grid to center region of coarse grid
+   # Interpolate values from finer grid to center region of coarse grids
    for lev=2:ngrids
       @views coarsify!( Γ[:, lev], Γ[:, lev-1], grid);
    end
 
-   # Invert Laplacian on largest grid
+   # Invert Laplacian on largest grid with zero boundary conditions
    ψ .*= 0.0; ψbc .*= 0.0
-
    @views mul!(ψ[:, ngrids], model.mats.Δinv, Γ[:, ngrids])  # Δψ = Γ
    @views curl!(q[:, ngrids], ψ[:, ngrids], ψbc, grid )      # q = ∇×ψ
-   #println(sum(ψ[:, ngrids].^2))
-   #println(sum(q[:, ngrids].^2))
 
-   # Telescope in to finer grids
+   # Telescope in to finer grids, using boundary conditions from coarser
    for lev=(ngrids-1):-1:1
       Γwork .= Γ[:, lev]
       @views get_bc!(ψbc, ψ[:, lev+1], grid)
       @views apply_bc!(Γwork, ψbc, 1.0, grid)
 
-      @views mul!(ψ[:, lev], model.mats.Δinv, Γwork)   # Δψ = Γ
+      @views mul!(ψ[:, lev], model.mats.Δinv, Γwork)      # Δψ = Γ
       if lev < ngrids
          @views curl!(q[:, lev], ψ[:, lev], ψbc, grid )   # q = ∇×ψ
       end

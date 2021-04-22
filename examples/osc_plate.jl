@@ -30,7 +30,6 @@ prob = ibpm.IBProblem(grid, bodies, Δt, Re);
 state = ibpm.IBState(prob);
 
 T=2.0*2π
-T = 1
 t = 0:Δt:T
 println(length(t))
 
