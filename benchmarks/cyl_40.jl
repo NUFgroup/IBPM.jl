@@ -14,6 +14,7 @@ Re = 40.0
 
 Uinf = 1.0;   # Free-stream flow
 r = 0.5; # Cylinder radius
+<<<<<<< HEAD
 
 grid = ibpm.make_grid(nx, ny, offx, offy, len, mg=mg)
 cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0 )]
@@ -27,3 +28,9 @@ ibpm.run_sim(t[1:2], state, prob) # Pre-compile
 
 # Advance to final time
 runtime = @elapsed ibpm.run_sim(t, state, prob; output=20)
+=======
+body = (type="cylinder", lengthscale=r, motion="static")
+T = 100
+runtime = ibpm.IBPM_advance( Re, nx,ny, offx, offy, len,
+    mg=mg, body=body, Δt=Δt, Uinf=Uinf, T=T, plot=false )
+>>>>>>> main
