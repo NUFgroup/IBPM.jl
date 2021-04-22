@@ -23,7 +23,6 @@ A, Ainv, B, and Binv matrices
 mutable struct IBProblem <: AbstractIBProblem
     model::IBModel
     scheme::ExplicitScheme
-    work::WorkingMemory
     A
     Ainv
     Binv
@@ -37,7 +36,6 @@ mutable struct IBProblem <: AbstractIBProblem
         prob.model = IBModel(grid, bodies, Re; Uinf=Uinf, α=α)
         prob.scheme = AB2(dt)   # Explicit time-stepping for nonlinear terms
         prob.A, prob.Ainv, prob.Binv = get_AB(prob.model, dt)
-        prob.work = WorkingMemory(grid)
         return prob
     end
 end
@@ -62,15 +60,14 @@ mutable struct IBState{T<:Grid} <: State
     slip::Float64
     function IBState(prob::IBProblem)
         grid = prob.model.grid
-        mg = (grid isa UniformGrid) ? 1 : grid.mg  # Number of grid levels
         nb, nf = get_body_info(prob.model.bodies)
 
         state = new{typeof(grid)}()
-        state.q  = zeros(grid.nq, mg)    # Flux
-        state.q0 = zeros(grid.nq, mg)    # Background flux
-        state.Γ  = zeros(grid.nΓ, mg)    # Circulation
-        state.ψ  = zeros(grid.nΓ, mg)    # Streamfunction
-        state.nonlin = [zeros(grid.nΓ, mg) for i=1:length(prob.scheme.β)]
+        state.q  = zeros(grid.nq, grid.mg)    # Flux
+        state.q0 = zeros(grid.nq, grid.mg)    # Background flux
+        state.Γ  = zeros(grid.nΓ, grid.mg)    # Circulation
+        state.ψ  = zeros(grid.nΓ, grid.mg)    # Streamfunction
+        state.nonlin = [zeros(grid.nΓ, grid.mg) for i=1:length(prob.scheme.β)]
         state.fb = [zeros(nf[i]) for i=1:length(nf)]
         state.F̃b = zeros(sum(nf))
         state.CD = zeros(length(prob.model.bodies))
@@ -100,10 +97,9 @@ function base_flux!(::Type{T} where T <: InertialMotion,
                     t::Float64)
     grid = prob.model.grid
     Uinf, α = prob.model.Uinf, prob.model.α
-    m = grid.nx;
-    n = grid.ny;
-    state.q0[ 1:(m-1)*n ] .= Uinf * grid.h * cos(α);  # x-flux
-    state.q0[ (m-1)*n+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
+    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
+    state.q0[ 1:nu ] .= Uinf * grid.h * cos(α);  # x-flux
+    state.q0[ nu+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
 end
 
 "Initialize irrotational freestream flux when not time-varying"
@@ -113,15 +109,14 @@ function base_flux!(::Type{T} where T <: InertialMotion,
                     t::Float64)
     grid = prob.model.grid
     Uinf, α = prob.model.Uinf, prob.model.α
-    m = grid.nx;
-    n = grid.ny;
+    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
     for lev = 1 : grid.mg
         # Coarse grid spacing
         hc = grid.h * 2^( lev - 1 );
 
         # write fluid velocity flux in body-fixed frame
-        state.q0[ 1:(m-1)*n, lev ] .= Uinf * hc * cos(α);      # x-flux
-        state.q0[ (m-1)*n+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
+        state.q0[ 1:nu, lev ] .= Uinf * hc * cos(α);      # x-flux
+        state.q0[ nu+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
     end
 end
 
@@ -132,8 +127,10 @@ function base_flux!(::Type{MovingGrid},
                     t::Float64)
     @assert length(prob.model.bodies) == 1 # Assumes only one body
     grid = prob.model.grid
+    XX, YY = prob.model.XX, prob.model.YY;
     motion = prob.model.bodies[1].motion
-    nu = grid.ny*(grid.nx-1);  # Number of x-flux points
+    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
+    nq = grid.nq
 
     ### Rotational part
     Ω = -motion.θ̇(t)
@@ -141,21 +138,20 @@ function base_flux!(::Type{MovingGrid},
     nx, ny, h = grid.nx, grid.ny, grid.h;
 
     ### x-flux
-    # TODO: CHECK OFFSETS FOR THESE
-    y = h*(1:ny) .- grid.offy
-    YY = ones(nx-1)*y'
-    state.q0[1:nu, 1] .= -h*Ω*YY[:]
+    #state.q0[1:nu, 1] .= -h*Ω*YY[:]
+    @views state.q0[1:nu] .= YY[:]
+    @views state.q0[1:nu] .*= -h*Ω
 
     ### y-flux
-    x = h*(1:nx) .- grid.offx
-    XX = x*ones(ny-1)'
-    state.q0[nu+1:grid.nq, 1] .= h*Ω*XX[:]
+    #state.q0[nu+1:end, 1] .= h*Ω*XX[:]
+    @views state.q0[(nu+1):end] .= XX[:]
+    @views state.q0[nu+1:nq] .*= h*Ω
 
     ### Potential flow part
     Ux0 = motion.U(t)*cos(α)
     Uy0 = motion.U(t)*sin(α)
-    state.q0[1:nu, 1] .+= h*Ux0          # x-flux
-    state.q0[nu+1:grid.nq, 1] .+= h*Uy0  # y-velocity
+    @views state.q0[1:nu, 1] .+= h*Ux0          # x-flux
+    @views state.q0[nu+1:nq, 1] .+= h*Uy0  # y-velocity
 end
 
 "Update time-varying background flux for moving grid"
@@ -167,7 +163,8 @@ function base_flux!(::Type{MovingGrid},
     grid = prob.model.grid
     motion = prob.model.bodies[1].motion
     XX, YY = prob.model.XX, prob.model.YY;
-    nu = grid.ny*(grid.nx-1);  # Number of x-flux points
+    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
+    nq = grid.nq
 
     ### Rotational part
     Ω = -motion.θ̇(t)
@@ -182,17 +179,15 @@ function base_flux!(::Type{MovingGrid},
         hc = grid.h*2^(lev-1);  # Coarse grid spacing
 
         ### x-fluxes
-        #y = @. ((1:ny)-0.5-ny/2)*hc + ny/2*h - grid.offy
-        #YY = ones(nx-1)*y'   # TODO:  Pre-compute or find a better way to do this
-        state.q0[1:nu, lev] .= -hc*Ω*YY[:, lev]
+        @views state.q0[1:nu, lev] .= YY[:, lev]
+        @views state.q0[1:nu, lev] .*= -hc*Ω
 
         ### y-fluxes
-        #x = @. ((1:nx)-0.5-nx/2)*hc + nx/2*h - grid.offx
-        #XX = x*ones(ny-1)'   # TODO:  Pre-compute or find a better way to do this
-        state.q0[nu+1:end, lev] .= hc*Ω*XX[:, lev]
+        @views state.q0[(nu+1):nq, lev] .= XX[:, lev]
+        @views state.q0[(nu+1):nq, lev] .*= hc*Ω
 
         ### Irrotational part
-        state.q0[1:nu, lev] .+= hc*Ux0          # x-flux
-        state.q0[nu+1:end, lev] .+= hc*Uy0  # y-velocity
+        @views state.q0[1:nu, lev] .+= hc*Ux0      # x-flux
+        @views state.q0[(nu+1):nq, lev] .+= hc*Uy0  # y-velocity
     end
 end

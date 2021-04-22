@@ -13,13 +13,6 @@ prob = ibpm.IBProblem(grid, bodies, Δt, Re; Uinf=Uinf);
 #@load "benchmarks/eldredge/steady.bson" state
 state = ibpm.IBState(prob);
 
-function run_sim(t, state, prob)
-	for i=1:length(t)
-		ibpm.advance!(state, prob, t[i])
-		@show (t[i], state.CD, state.CL, state.cfl)
-	end
-end
-
-run_sim(t, state, prob) #advance to final time
+ibpm.run_sim(t, state, prob) #advance to final time
 
 @save "benchmarks/eldredge/results/steady.bson" state
