@@ -32,6 +32,8 @@ mutable struct IBMatrices
     Λ::Array{Float64, 2}
     Δinv::LinearMap
     E::LinearMap
+    #Q::SparseArrays.SparseMatrixCSC{Float64,Int64}
+    #W::SparseArrays.SparseMatrixCSC{Float64,Int64}
     dst_plan::Any
     function IBMatrices(grid::T, bodies::Array{V, 1}) where T <: Grid where V <: Body
         mats = new()
@@ -47,6 +49,10 @@ mutable struct IBMatrices
 
         # Interpolation/regularization matrix
         mats.E = ibpm.setup_reg(grid, bodies)   # interface-coupling/interface-oupling.jl
+
+        # Averaging operators for nonlinear term
+        #mats.Q = get_Q( grid );
+        #mats.W = get_W( grid );
         return mats
     end
 end
@@ -71,6 +77,7 @@ mutable struct WorkingMemory
     q2::Array{Float64, 2}
     q3::Array{Float64, 2}
     q4::Array{Float64, 2}
+    q5::Array{Float64, 2}
     Γ1::Array{Float64, 2}
     Γ2::Array{Float64, 2}
     Γ3::Array{Float64, 2}
@@ -82,6 +89,7 @@ mutable struct WorkingMemory
         work.q2 = zeros(grid.nq, grid.mg)
         work.q3 = zeros(grid.nq, grid.mg)
         work.q4 = zeros(grid.nq, grid.mg)
+        work.q5 = zeros(grid.nq, grid.mg)
         work.Γ1 = zeros(grid.nΓ, grid.mg)
         work.Γ2 = zeros(grid.nΓ, grid.mg)
         work.Γ3 = zeros(grid.nΓ, grid.mg)

@@ -13,13 +13,13 @@ Script to run the validation case is `cyl40.jl`.
 | Fortran |  ~800  |  1.5377953  |
 | Julia (single-core)  | 691   |  1.5738 |
 | Julia (4 threads)  |  488   |  1.5738  |
-| Julia (Fortran port) | 1651 | 1.5377938  |
+| Julia (Fortran port) | 491 | 1.5377938  |
 
 Single grid level:
 | Package      | Runtime (secs) |  $C_D$ |
 | ----------- | ----------- | -----|
 | Fortran |  278  |  2.5060811857143  |
-| Julia  | 540 | 2.5060811090446  |
+| Julia  | 345 | 2.5060811090446  |
 
 
 ### Re=20 cylinder (rotating)

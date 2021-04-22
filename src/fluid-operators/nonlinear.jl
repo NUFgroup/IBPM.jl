@@ -18,21 +18,11 @@ function avg_flux(state, prob)
 
    # Index into Qx from (1:nx+1)×(2:ny)
    i=2:nx+1; j=2:ny
-   """broadcast!(+, @view(Qx[i,j]),
-              @view(qx[i,j]), @view(q0x[i,j]),
-              @view(qx[i,j.-1]), @view(q0x[i,j.-1]) );"""
-
    @views broadcast!(+, Qx[i,j], qx[i,j], q0x[i,j], qx[i,j.-1], q0x[i,j.-1] )
-   Qx .*= 0.5;
 
    # Index into Qy from (2:nx)×(1:ny+1)
    i=2:nx; j=1:ny+1
-   """broadcast!(+, @view(Qy[i,j]),
-              @view(qy[i,j]), @view(q0y[i,j]),
-              @view(qy[i.-1,j]), @view(q0y[i.-1,j]) );"""
-
    @views broadcast!(+, Qy[i,j], qy[i,j], q0y[i,j], qy[i.-1,j], q0y[i.-1,j] )
-   Qy .*= 0.5
 
    return Qx, Qy
 end
@@ -53,36 +43,50 @@ function nonlinear!( nonlin::AbstractArray,
       9.909 ms (236 allocations: 5.47 MiB)
    Views and precompute avg flux:
       7.538 ms (268 allocations: 4.27 MiB)
-
-
+   Broadcasting:
+      6.902 ms (389 allocations: 1.23 MiB)
+   Updated rot:
+      5.033 ms (387 allocations: 2.44 MiB)
+   Eliminated multiplication
+      1.790 ms (383 allocations: 2.44 MiB)
    """
    grid = prob.model.grid;
    nx, ny = grid.nx, grid.ny
    C = prob.model.mats.C
 
-   # Alias working memory
+   # Alias working memory  (q1 is qs in advance, q2 becomes average Q)
    fq = prob.model.work.q3; fq.*=0.0;
    fqx, fqy = grid.split_flux(fq);
+
+   fq1 = prob.model.work.q4; fq1.*=0.0;
+   fq1x, fq1y = grid.split_flux(fq1);
+
+   fq2 = prob.model.work.q5; fq2.*=0.0;
+   fq2x, fq2y = grid.split_flux(fq2);
+
    Γ = reshape(state.Γ, nx-1, ny-1)
 
    Qx, Qy = avg_flux(state, prob)
 
    i=2:nx; j=2:ny-1
-   @views fqx[i,j] = ( Qy[i,j.+1].*Γ[i.-1,j] .+ Qy[i,j].*Γ[i.-1,j.-1] )
-   j=1;  @views fqx[i,j] = ( Qy[i,j.+1].*Γ[i.-1,j] )
-   j=ny; @views fqx[i,j] = ( Qy[i,j].*Γ[i.-1,j.-1] )
+   @views broadcast!(*, fq1x[i,j], Qy[i,j.+1], Γ[i.-1,j])
+   @views broadcast!(*, fq2x[i,j], Qy[i,j], Γ[i.-1,j.-1])
+   @views broadcast!(+, fqx[i,j], fq1x[i,j], fq2x[i,j])
+   j=1;  @views broadcast!(*, fqx[i,j], Qy[i,j.+1], Γ[i.-1,j]);
+   j=ny; @views broadcast!(*, fqx[i,j], Qy[i,j], Γ[i.-1,j.-1]);
 
    i=2:nx-1; j=2:ny
-   @views fqy[i,j] = -( Qx[i.+1,j].*Γ[i,j.-1] .+ Qx[i,j].*Γ[i.-1,j.-1] )
-   i=1;  @views fqy[i,j]  = -( Qx[i.+1,j].*Γ[i,j.-1] )
-   i=nx; @views fqy[i,j]  = -( Qx[i,j].*Γ[i.-1,j.-1] )
+   @views broadcast!(*, fq1y[i,j], -Qx[i.+1,j], Γ[i,j.-1])
+   @views broadcast!(*, fq2y[i,j], -Qx[i,j], Γ[i.-1,j.-1])
+   @views broadcast!(+, fqy[i,j], fq1y[i,j], fq2y[i,j])
+   i=1;  @views broadcast!(*, fqy[i,j], -Qx[i.+1,j], Γ[i,j.-1])
+   i=nx; @views broadcast!(*, fqy[i,j], -Qx[i,j], Γ[i.-1,j.-1])
 
-   mul!( nonlin, C', fq )    # OK TO HERE
-   nonlin .*= 1/(2*grid.h^2)  # Scaling factor for Γ->ω and flux averaging
+   mul!( nonlin, C', fq )
+   nonlin .*= 1/(4*grid.h^2)  # Scaling factor for Γ->ω and flux averaging
 
    return nothing
 end
-
 
 """
 Compute average fluxes across cells
@@ -104,16 +108,21 @@ function avg_flux(state, prob, lev)
    # Index into Qx from (1:nx+1)×(2:ny)
    i=1:nx+1; j=2:ny
    @views broadcast!(+, Qx[i,j], qx[i,j], q0x[i,j], qx[i,j.-1], q0x[i,j.-1] )
-   Qx .*= 0.5;
 
    # Index into Qy from (2:nx)×(1:ny+1)
    i=2:nx; j=1:ny+1
    @views broadcast!(+, Qy[i,j], qy[i,j], q0y[i,j], qy[i.-1,j], q0y[i.-1,j] )
-   Qy .*= 0.5;
 
    return Qx, Qy
 end
 
+" fq = scale*(Q1*Γ1 + Q2*Γ2) "
+function nl_avg!(fq, Q1, Γ1, Q2, Γ2, fq1, fq2)
+   broadcast!(*, fq1, Q1, Γ1)
+   broadcast!(*, fq2, Q2, Γ2)
+   broadcast!(+, fq, fq1, fq2)
+   return nothing
+end
 
 function nonlinear!( nonlin::AbstractArray,
                      state::IBState{MultiGrid},
@@ -125,8 +134,8 @@ function nonlinear!( nonlin::AbstractArray,
    "lastbc" from Fortran code
 
    11.066 ms (323 allocations: 4.28 MiB)
-
    9.984 ms (400 allocations: 1.84 MiB)
+   4.049 ms (505 allocations: 2.46 MiB)
    """
    grid = prob.model.grid;
    nx, ny = grid.nx, grid.ny
@@ -139,28 +148,46 @@ function nonlinear!( nonlin::AbstractArray,
    fq = @view(prob.model.work.q3[:, lev]); fq.*=0.0;
    fqx, fqy = grid.split_flux(fq);
 
+   fq1 = @view(prob.model.work.q4[:, lev]); fq1.*=0.0;
+   fq1x, fq1y = grid.split_flux(fq1);
+
+   fq2 = @view(prob.model.work.q5[:, lev]); fq2.*=0.0;
+   fq2x, fq2y = grid.split_flux(fq2);
+
    Γ = reshape(@view(state.Γ[:, lev]), nx-1, ny-1)
    Qx, Qy = avg_flux(state, prob, lev)
 
    # Don't need bc's for anything after this, so we can rescale in place
    Γbc .*= 0.25  # Account for scaling between grids
 
+   ### x-fluxes
    i=2:nx; j=2:ny-1
-   @views @. fqx[i,j] = Qy[i,j+1]*Γ[i-1,j] + Qy[i,j]*Γ[i-1,j-1]
-   j=1;  @views @. fqx[i,j] = Qy[i,j+1]*Γ[i-1,j] + Qy[i,j]*Γbc[B+i]
-   j=ny; @views @. fqx[i,j] = Qy[i,j]*Γ[i-1,j-1] + Qy[i,j+1]*Γbc[T+i]
+   @views nl_avg!(fqx[i,j], Qy[i,j.+1], Γ[i.-1,j],
+         Qy[i,j], Γ[i.-1,j.-1], fq1x[i,j], fq2x[i,j])
+   j=1;  # Bottom boundary
+   @views nl_avg!(fqx[i,j], Qy[i,j.+1], Γ[i.-1,j],
+         Qy[i,j], Γbc[B.+i], fq1x[i,j], fq2x[i,j])
+   j=ny;  # Top boundary
+   @views nl_avg!(fqx[i,j], Qy[i,j], Γ[i.-1,j.-1],
+         Qy[i,j.+1], Γbc[T.+i], fq1x[i,j], fq2x[i,j])
 
+   ### y-fluxes
    i=2:nx-1; j=2:ny
-   @views @. fqy[i,j] = -( Qx[i+1,j]*Γ[i,j-1] + Qx[i,j]*Γ[i-1,j-1] )
-   i=1;  @views @. fqy[i,j] = -( Qx[i+1,j]*Γ[i,j-1] + Qx[i,j]*Γbc[L+j] )
-   i=nx; @views @. fqy[i,j] = -( Qx[i,j]*Γ[i-1,j-1] + Qx[i+1,j]*Γbc[R+j] )
+   @views nl_avg!(fqy[i,j], -Qx[i.+1,j], Γ[i,j.-1],
+         -Qx[i,j], Γ[i.-1,j.-1], fq1y[i,j], fq2y[i,j])
+   i=1;  # Left boundary
+   @views nl_avg!(fqy[i,j], -Qx[i.+1,j], Γ[i,j.-1],
+         -Qx[i,j],  Γbc[L.+j], fq1y[i,j], fq2y[i,j])
+   i=nx;
+   @views nl_avg!(fqy[i,j], -Qx[i,j], Γ[i.-1,j.-1],
+         -Qx[i.+1,j],  Γbc[R.+j], fq1y[i,j], fq2y[i,j])
 
    mul!( nonlin, C', fq )
 
    # Scaling: 1/hc^2 to convert circulation to vorticity
-   #   plus factor of 2 from averaging across cells above
+   #   plus factor of 4 from averaging across cells above
    #  (applies to flux field, but this avoids a second operation)
-   nonlin .*= 1/(2*hc^2)
+   nonlin .*= 1/(4*hc^2)
 
    return nothing
 end

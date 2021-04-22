@@ -17,7 +17,8 @@ function rot!( Γ, q, grid )
     Γ = reshape(Γ, grid.nx-1, grid.ny-1)
     qx, qy = grid.split_flux(q)
 
-    @views @. Γ[i-1, j-1] = qy[i, j] - qy[i-1, j] - qx[i, j] + qx[i, j-1]
+    #@views @. Γ[i-1, j-1] = qy[i, j] - qy[i-1, j] - qx[i, j] + qx[i, j-1]
+    @views broadcast!(+, Γ[i.-1, j.-1], qy[i, j], -qy[i.-1, j], -qx[i, j], qx[i, j.-1])
     Γ = reshape(Γ, grid.nΓ, 1)
 
     return nothing
@@ -31,6 +32,30 @@ Discrete curl operator
 q = curl( ψ )
 """
 function curl!( q, ψ, grid )
+   nx, ny = grid.nx, grid.ny
+   ψ = reshape(ψ, grid.nx-1, grid.ny-1)
+   qx, qy = grid.split_flux(q)
+
+   # x-fluxes
+   i=2:nx; j=2:ny-1
+   #@views @. qx[i, j] = ψ[i-1,j] - ψ[i-1, j-1]
+   @views broadcast!(-, qx[i, j], ψ[i.-1,j], ψ[i.-1, j.-1])
+   j=1;  @views @. qx[i, j] =  ψ[i.-1, j]     # Top boundary
+   j=ny; @views @. qx[i, j] = -ψ[i.-1, j.-1]   # Bottom boundary
+
+   # y-fluxes
+   i=2:nx-1;  j=2:ny
+   #@views @. qy[i,j] = ψ[i-1,j-1] - ψ[i,j-1]
+   @views broadcast!(-, qy[i,j], ψ[i.-1,j.-1], ψ[i,j.-1])
+   i=1;  @views @. qy[i,j] = -ψ[i, j-1]          # Left boundary
+   i=nx; @views @. qy[i,j] =  ψ[i-1, j-1]        # Right boundary
+
+   ψ = reshape(ψ, grid.nΓ, 1)
+
+    return nothing
+end
+
+function curl_OLD!( q, ψ, grid )
    nx, ny = grid.nx, grid.ny
    ψ = reshape(ψ, grid.nx-1, grid.ny-1)
    qx, qy = grid.split_flux(q)
@@ -53,6 +78,49 @@ function curl!( q, ψ, grid )
 end
 
 function curl!( q, ψ, ψbc, grid::MultiGrid )
+   """
+   Compute velocity flux from streamfunction.
+    Note: requires streamfunction from coarser grid on edge
+          of current domain (stored in ψbc)
+   """
+   nx, ny = grid.nx, grid.ny
+   T, B, L, R = grid.TOP, grid.BOT, grid.LEFT, grid.RIGHT  # Constant offsets for indexing BCs
+   ψ = reshape(ψ, grid.nx-1, grid.ny-1)
+   qx, qy = grid.split_flux(q)
+
+   ### x-fluxes
+   i=2:nx; j=2:ny-1
+   @views broadcast!(-, qx[i, j], ψ[i.-1,j], ψ[i.-1, j.-1])
+
+   # Top/bottom boundaries
+   j=1;  @views broadcast!(-, qx[i, j], ψ[i.-1,j], ψbc[(B-1).+i])
+   j=ny; @views broadcast!(-, qx[i, j], ψbc[i.+T], ψ[i.-1, j.-1])
+
+   # Left/right boundaries
+   j=1:ny;
+   i=1;     @views broadcast!(-, qx[i, j], ψbc[(L+1).+j], ψbc[L.+j])
+   i=nx+1;  @views broadcast!(-, qx[i, j], ψbc[(R+1).+j], ψbc[R.+j])
+
+   #### y-fluxes
+   i=2:nx-1;  j=2:ny
+   @views broadcast!(-, qy[i,j], ψ[i.-1,j.-1], ψ[i,j.-1])
+
+   # Left/right boundaries
+   i=1;  @views broadcast!(-, qy[i,j], ψbc[L.+j], ψ[i, j.-1])
+   i=nx; @views broadcast!(-, qy[i,j], ψ[i.-1, j.-1], ψbc[R.+j])
+
+   # Top/bottom boundaries
+   i=1:nx
+   j=1;    @views broadcast!(-, qy[i,j], ψbc[B.+i], ψbc[(B+1).+i])
+   j=ny+1; @views broadcast!(-, qy[i,j], ψbc[T.+i], ψbc[(T+1).+i])
+
+   ψ = reshape(ψ, grid.nΓ, 1)
+
+    return nothing
+end
+
+
+function curl_OLD!( q, ψ, ψbc, grid::MultiGrid )
    """
    Compute velocity flux from streamfunction.
     Note: requires streamfunction from coarser grid on edge
