@@ -125,7 +125,7 @@ function vort2flux!( ψ, q, Γ, model::IBModel{MultiGrid, <:Body},
    ψbc = model.work.Γbc  # Same shape for both boundary conditions
    Γwork = @view(model.work.Γ3[:, 1])  # Working memory
 
-   #println("=== VORT2FLUX ===")
+   #println("=== INSIDE VORT2FLUX ===")
 
    # Interpolate values from finer grid to center region of coarse grid
    for lev=2:ngrids
@@ -133,15 +133,17 @@ function vort2flux!( ψ, q, Γ, model::IBModel{MultiGrid, <:Body},
    end
 
    # Invert Laplacian on largest grid
-   ψ .*= 0.0
+   ψ .*= 0.0; ψbc .*= 0.0
 
    @views mul!(ψ[:, ngrids], model.mats.Δinv, Γ[:, ngrids])  # Δψ = Γ
    @views curl!(q[:, ngrids], ψ[:, ngrids], ψbc, grid )      # q = ∇×ψ
+   #println(sum(ψ[:, ngrids].^2))
+   #println(sum(q[:, ngrids].^2))
 
    # Telescope in to finer grids
    for lev=(ngrids-1):-1:1
       Γwork .= Γ[:, lev]
-      @views get_bc!(ψbc, ψ[:, lev+1], 1.0, grid)
+      @views get_bc!(ψbc, ψ[:, lev+1], grid)
       @views apply_bc!(Γwork, ψbc, 1.0, grid)
 
       @views mul!(ψ[:, lev], model.mats.Δinv, Γwork)   # Δψ = Γ

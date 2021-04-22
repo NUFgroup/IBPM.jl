@@ -18,17 +18,21 @@ function avg_flux(state, prob)
 
    # Index into Qx from (1:nx+1)×(2:ny)
    i=2:nx+1; j=2:ny
-   broadcast!(+, @view(Qx[i,j]),
+   """broadcast!(+, @view(Qx[i,j]),
               @view(qx[i,j]), @view(q0x[i,j]),
-              @view(qx[i,j.-1]), @view(q0x[i,j.-1]) );
-   rmul!(Qx, 0.5);
+              @view(qx[i,j.-1]), @view(q0x[i,j.-1]) );"""
+
+   @views broadcast!(+, Qx[i,j], qx[i,j], q0x[i,j], qx[i,j.-1], q0x[i,j.-1] )
+   Qx .*= 0.5;
 
    # Index into Qy from (2:nx)×(1:ny+1)
    i=2:nx; j=1:ny+1
-   broadcast!(+, @view(Qy[i,j]),
+   """broadcast!(+, @view(Qy[i,j]),
               @view(qy[i,j]), @view(q0y[i,j]),
-              @view(qy[i.-1,j]), @view(q0y[i.-1,j]) );
-   rmul!(Qy, 0.5);
+              @view(qy[i.-1,j]), @view(q0y[i.-1,j]) );"""
+
+   @views broadcast!(+, Qy[i,j], qy[i,j], q0y[i,j], qy[i.-1,j], q0y[i.-1,j] )
+   Qy .*= 0.5
 
    return Qx, Qy
 end
@@ -64,17 +68,17 @@ function nonlinear!( nonlin::AbstractArray,
    Qx, Qy = avg_flux(state, prob)
 
    i=2:nx; j=2:ny-1
-   @views fqx[i,j] = 0.5*( Qy[i,j.+1].*Γ[i.-1,j] .+ Qy[i,j].*Γ[i.-1,j.-1] )
-   j=1;  @views fqx[i,j] = 0.5*( Qy[i,j.+1].*Γ[i.-1,j] )
-   j=ny; @views fqx[i,j] = 0.5*( Qy[i,j].*Γ[i.-1,j.-1] )
+   @views fqx[i,j] = ( Qy[i,j.+1].*Γ[i.-1,j] .+ Qy[i,j].*Γ[i.-1,j.-1] )
+   j=1;  @views fqx[i,j] = ( Qy[i,j.+1].*Γ[i.-1,j] )
+   j=ny; @views fqx[i,j] = ( Qy[i,j].*Γ[i.-1,j.-1] )
 
    i=2:nx-1; j=2:ny
-   @views fqy[i,j] = -0.5*( Qx[i.+1,j].*Γ[i,j.-1] .+ Qx[i,j].*Γ[i.-1,j.-1] )
-   i=1;  @views fqy[i,j]  = -0.5*( Qx[i.+1,j].*Γ[i,j.-1] )
-   i=nx; @views fqy[i,j]  = -0.5*( Qx[i,j].*Γ[i.-1,j.-1] )
+   @views fqy[i,j] = -( Qx[i.+1,j].*Γ[i,j.-1] .+ Qx[i,j].*Γ[i.-1,j.-1] )
+   i=1;  @views fqy[i,j]  = -( Qx[i.+1,j].*Γ[i,j.-1] )
+   i=nx; @views fqy[i,j]  = -( Qx[i,j].*Γ[i.-1,j.-1] )
 
    mul!( nonlin, C', fq )    # OK TO HERE
-   nonlin .*= 1/grid.h^2  # Scaling factor for differencing
+   nonlin .*= 1/(2*grid.h^2)  # Scaling factor for Γ->ω and flux averaging
 
    return nothing
 end
@@ -139,20 +143,24 @@ function nonlinear!( nonlin::AbstractArray,
    Qx, Qy = avg_flux(state, prob, lev)
 
    # Don't need bc's for anything after this, so we can rescale in place
-   Γbc .*= 0.5
+   Γbc .*= 0.25  # Account for scaling between grids
 
    i=2:nx; j=2:ny-1
-   @views @. fqx[i,j] = 0.5*( Qy[i,j+1]*Γ[i-1,j] + Qy[i,j]*Γ[i-1,j-1] )
-   j=1;  @views @. fqx[i,j] = 0.5*( Qy[i,j+1]*Γ[i-1,j] + Qy[i,j]*Γbc[B+i] )
-   j=ny; @views @. fqx[i,j] = 0.5*( Qy[i,j]*Γ[i-1,j-1] + Qy[i,j+1]*Γbc[T+i] )
+   @views @. fqx[i,j] = Qy[i,j+1]*Γ[i-1,j] + Qy[i,j]*Γ[i-1,j-1]
+   j=1;  @views @. fqx[i,j] = Qy[i,j+1]*Γ[i-1,j] + Qy[i,j]*Γbc[B+i]
+   j=ny; @views @. fqx[i,j] = Qy[i,j]*Γ[i-1,j-1] + Qy[i,j+1]*Γbc[T+i]
 
    i=2:nx-1; j=2:ny
-   @views @. fqy[i,j] = -0.5*( Qx[i+1,j]*Γ[i,j-1] + Qx[i,j]*Γ[i-1,j-1] )
-   i=1;  @views @. fqy[i,j] = -0.5*( Qx[i+1,j]*Γ[i,j-1] + Qx[i,j]*Γbc[L+j] )
-   i=nx; @views @. fqy[i,j] = -0.5*( Qx[i,j]*Γ[i-1,j-1] + Qx[i+1,j]*Γbc[R+j] )
+   @views @. fqy[i,j] = -( Qx[i+1,j]*Γ[i,j-1] + Qx[i,j]*Γ[i-1,j-1] )
+   i=1;  @views @. fqy[i,j] = -( Qx[i+1,j]*Γ[i,j-1] + Qx[i,j]*Γbc[L+j] )
+   i=nx; @views @. fqy[i,j] = -( Qx[i,j]*Γ[i-1,j-1] + Qx[i+1,j]*Γbc[R+j] )
 
    mul!( nonlin, C', fq )
-   nonlin .*= 1/hc^2   # Scaling factor for differencing
+
+   # Scaling: 1/hc^2 to convert circulation to vorticity
+   #   plus factor of 2 from averaging across cells above
+   #  (applies to flux field, but this avoids a second operation)
+   nonlin .*= 1/(2*hc^2)
 
    return nothing
 end

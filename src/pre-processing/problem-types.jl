@@ -129,6 +129,7 @@ function base_flux!(::Type{MovingGrid},
                     t::Float64)
     @assert length(prob.model.bodies) == 1 # Assumes only one body
     grid = prob.model.grid
+    XX, YY = prob.model.XX, prob.model.YY;
     motion = prob.model.bodies[1].motion
     nu = grid.ny*(grid.nx-1);  # Number of x-flux points
 
@@ -139,13 +140,13 @@ function base_flux!(::Type{MovingGrid},
 
     ### x-flux
     # TODO: CHECK OFFSETS FOR THESE
-    y = h*(1:ny) .- grid.offy
-    YY = ones(nx-1)*y'
+    #y = h*(1:ny) .- grid.offy
+    #YY = ones(nx-1)*y'
     state.q0[1:nu, 1] .= -h*Ω*YY[:]
 
     ### y-flux
-    x = h*(1:nx) .- grid.offx
-    XX = x*ones(ny-1)'
+    #x = h*(1:nx) .- grid.offx
+    #XX = x*ones(ny-1)'
     state.q0[nu+1:grid.nq, 1] .= h*Ω*XX[:]
 
     ### Potential flow part
@@ -179,17 +180,13 @@ function base_flux!(::Type{MovingGrid},
         hc = grid.h*2^(lev-1);  # Coarse grid spacing
 
         ### x-fluxes
-        #y = @. ((1:ny)-0.5-ny/2)*hc + ny/2*h - grid.offy
-        #YY = ones(nx-1)*y'   # TODO:  Pre-compute or find a better way to do this
         state.q0[1:nu, lev] .= -hc*Ω*YY[:, lev]
 
         ### y-fluxes
-        #x = @. ((1:nx)-0.5-nx/2)*hc + nx/2*h - grid.offx
-        #XX = x*ones(ny-1)'   # TODO:  Pre-compute or find a better way to do this
         state.q0[nu+1:end, lev] .= hc*Ω*XX[:, lev]
 
         ### Irrotational part
-        state.q0[1:nu, lev] .+= hc*Ux0          # x-flux
+        state.q0[1:nu, lev] .+= hc*Ux0      # x-flux
         state.q0[nu+1:end, lev] .+= hc*Uy0  # y-velocity
     end
 end

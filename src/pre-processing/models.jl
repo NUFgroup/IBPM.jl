@@ -124,10 +124,9 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
             # Define x-xc, y-yc on all grids
             @assert length(bodies) == 1
             motion = bodies[1].motion
-            mg = (grid isa UniformGrid) ? 1 : grid.mg  # Number of grid levels
             nx, ny, h = grid.nx, grid.ny, grid.h
-            XX = zeros(nx*(ny+1), mg)  # Number of y-fluxes
-            YY = zeros(ny*(nx+1), mg)  # Number of x-fluxes
+            XX = zeros(nx*(ny+1), grid.mg)  # Number of y-fluxes
+            YY = zeros(ny*(nx+1), grid.mg)  # Number of x-fluxes
 
             for lev=1:grid.mg
                 hc = h*2^(lev-1);  # Coarse grid spacing

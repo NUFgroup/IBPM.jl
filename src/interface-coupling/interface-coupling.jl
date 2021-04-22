@@ -61,8 +61,6 @@ function δh( rf, rb , dr )
     return del_h
 end
 
-
-
 """
 Return the interpolation matrix E, which interpolates flow quantities
 to the immersed boundary.  This depends on the position of the body points,

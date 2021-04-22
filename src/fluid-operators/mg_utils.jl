@@ -4,7 +4,7 @@
 !*   it's values to the edge of a smaller, finer mesh          *!
 !***************************************************************!
 """
-function get_bc!(rbc, r, fac, grid)
+function get_bc!(rbc, r, grid)
     T, B, L, R = grid.TOP, grid.BOT, grid.LEFT, grid.RIGHT  # Constant offsets for indexing BCs
     nx, ny = grid.nx, grid.ny
     r = reshape(r, nx-1, ny-1)
@@ -25,8 +25,6 @@ function get_bc!(rbc, r, fac, grid)
     j=(ny÷4).+(1:ny÷2); jbc=2:2:ny
     @views @. rbc[L+jbc] = 0.5*( r[  nx÷4, j] + r[  nx÷4, j-1] )
     @views @. rbc[R+jbc] = 0.5*( r[3*nx÷4, j] + r[3*nx÷4, j-1] )
-
-    rbc .*= fac
 
     r = reshape(r, grid.nΓ, 1)
 

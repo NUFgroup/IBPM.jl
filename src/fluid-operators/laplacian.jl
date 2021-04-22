@@ -60,12 +60,28 @@ function get_A(model::IBModel, dt::Float64, h::Float64)
     return get_lap_inv(model.grid, 1 ./ Λ̃, model.mats.dst_plan)
 end
 
+"""function get_A(model::IBModel, dt::Float64, h::Float64)
+    C = model.mats.C
+    return I - (dt/(2*model.Re*h^2))*(C'C)
+end"""
+
 function get_AB(model::IBModel{UniformGrid, <:Body}, dt::Float64)
     A = get_A(model, dt, model.grid.h)
     Ainv = get_Ainv(model, dt, model.grid.h)
     Binv = get_Binv(model, Ainv)
     return A, Ainv, Binv
 end
+
+
+
+function get_AB(model::IBModel{MultiGrid, <:Body}, dt::Float64)
+    hc = [model.grid.h * 2^(lev-1) for lev=1:model.grid.mg]
+    A = [get_A(model, dt, h) for h in hc]
+    Ainv = [get_Ainv(model, dt, h) for h in hc]
+    Binv = get_Binv(model, Ainv[1])  # Only need this on the finest grid
+    return A, Ainv, Binv
+end
+
 
 """
 Precompute 'Binv' matrix by evaluating mat-vec products for unit vectors
@@ -150,13 +166,4 @@ function B_times!(x::Array{Float64, 1},
 
     #--Interpolate onto the body
     @views mul!(x, E, q[:, 1])
-end
-
-
-function get_AB(model::IBModel{MultiGrid, <:Body}, dt::Float64)
-    hc = [model.grid.h * 2^(lev-1) for lev=1:model.grid.mg]
-    A = [get_A(model, dt, h) for h in hc]
-    Ainv = [get_Ainv(model, dt, h) for h in hc]
-    Binv = get_Binv(model, Ainv[1])  # Only need this on the finest grid
-    return A, Ainv, Binv
 end

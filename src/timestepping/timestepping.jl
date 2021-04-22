@@ -70,6 +70,10 @@ function advance!(state::IBState{MultiGrid},
     @views boundary_forces!(state.F̃b, qs[:, 1], state.q0[:, 1], prob)
     update_stress!(state, prob) #Compute integral quantities and store in state
 
+    #println(sum(Γs.^2))
+    #println(sum(state.Γ[:, 1].^2))
+    #println(sum(qs.^2))
+
     # --update circulation , vel-flux, and strmfcn on fine grid
     #   to satisfy no-slip updates state.Γ, state.ψ, state.q
     project_circ!(Γs, state, prob)
@@ -80,6 +84,7 @@ function advance!(state::IBState{MultiGrid},
 
     #println("Final circulation: ", sum(state.Γ.^2))
     #println("Final flux: ", sum(state.q.^2))
+    #println("Final stfn: ", sum(state.ψ.^2))
 
     #--A few simulation quantities of interest
     # get CFL (u * dt / dx) :
@@ -132,8 +137,6 @@ function get_trial_state!(qs::AbstractArray,
     # Trial circulation  Γs = Ainv * rhs
     mul!(Γs, prob.Ainv, rhs);
 
-    #println(sum(Γs.^2))
-
     # Trial velocity  (note ψ is used here as a dummy variable)
     vort2flux!( state.ψ, qs, Γs, prob.model )
 
@@ -142,8 +145,6 @@ function get_trial_state!(qs::AbstractArray,
 
     return nothing
 end
-
-
 
 function get_trial_state!(qs::AbstractArray,
                           Γs::AbstractArray,
@@ -159,26 +160,26 @@ function get_trial_state!(qs::AbstractArray,
     for lev=grid.mg:-1:1
         bc .*= 0.0; rhsbc .*= 0.0
         hc = grid.h * 2^( lev - 1);
-        #println("=== TRIAL STATE, LEVEL ", lev, " ===")
 
         if lev < grid.mg
-            @views get_bc!(bc, state.Γ[:, lev+1], 0.5, grid)
+            @views get_bc!(bc, state.Γ[:, lev+1], grid)
 
-            vfac = 0.5*dt/ ( prob.model.Re * hc^2 * 4*grid.nx*grid.ny )
-            apply_bc!( rhsbc, bc, vfac, grid )
+            fac = 0.25*dt/ ( prob.model.Re * hc^2 )
+            apply_bc!( rhsbc, bc, fac, grid )
         end
 
         #compute the nonlinear term for the current time step
-        #println("=== NONLIN ", lev, " ===")
+        # THIS IS THE MOST EXPENSIVE THING NOW!!!
         @views nonlinear!( state.nonlin[1][:, lev], state, bc, lev, prob );
+
         @views mul!( rhs, prob.A[lev], state.Γ[:, lev] )
 
         for n=1:length(prob.scheme.β)
-            rhs .+= prob.scheme.β[n]*dt*@view(state.nonlin[n][:, lev])
+            rhs .+= (prob.scheme.β[n]*dt)*@view(state.nonlin[n][:, lev])
         end
 
         # Include boundary conditions
-        rhs .+= 0.5*dt*rhsbc
+        rhs .+= rhsbc
 
         # Trial circulation  Γs = Ainv * rhs
         @views mul!(Γs[:, lev], prob.Ainv[lev], rhs)
@@ -188,7 +189,6 @@ function get_trial_state!(qs::AbstractArray,
     state.nonlin[2] .= state.nonlin[1]
 
     vort2flux!( state.ψ, qs, Γs, prob.model, grid.mg )
-
     return nothing
 end
 
@@ -222,14 +222,17 @@ function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
                           q0::AbstractVector,
                           prob::AbstractIBProblem)
     #println("=== BOUNDARY FORCES ===")
-
     E = prob.model.mats.E
     h = prob.model.grid.h
 
     qwork = @view(prob.model.work.q2[:, 1])  # Working memory for in-place operations
     broadcast!(+, qwork, qs, q0)                     # qs + q0
     mul!(F̃b, E, qwork)                               # E*(qs .+ state.q0)... using fb here as working array
+    #println(sum(q0.^2))
+    #println(sum(qs.^2))
+    #println(sum(F̃b.^2))
     F̃b .= prob.Binv*F̃b                         # Allocates a small amount of memory
+    #println(sum(F̃b.^2))
 
     return nothing
 end
@@ -322,6 +325,8 @@ function project_circ!(::Type{V} where V<:Motion,
     #println(sum(Γwork.^2))
 
     state.Γ[:, 1] .-= Γwork
+
+    #println(sum(state.Γ.^2))
 
     return nothing
 end
