@@ -99,8 +99,7 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
         @. weight[k, 1, :, :] = δh(x, xb[k, 1], h) * δh(y+h/2, xb[k, 2], h)
         @. weight[k, 2, :, :] = δh(x+h/2, xb[k, 1], h) * δh(y, xb[k, 2], h)
     end
-
-
+    
     " Matrix E' "
     function reg!(q, fb)
         q .*= 0.0

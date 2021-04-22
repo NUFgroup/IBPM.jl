@@ -17,8 +17,8 @@ grid = ibpm.make_grid(nx, ny, offx, offy, len, mg=mg)
 Re = 100.0
 
 x0, y0 = 0.0, 0.0  # Plate center
-nb = 0;  # Number of body points (0 for ds=2h)
-#nb = 51;
+#nb = 0;  # Number of body points (0 for ds=2h)
+nb = 51;
 L = 1.0   # Plate length
 
 # Initialize motion

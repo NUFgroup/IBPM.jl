@@ -44,8 +44,9 @@ function make_grid(nx::Int, ny::Int, offx::Float64, offy::Float64, len::Float64;
     h = len / nx;  # Grid spacing
 
     "Return a view to 2D arrays of fluxes"
-    split_flux(q) = reshape(@view(q[1:nu]), nx+1, ny), reshape(@view(q[nu+1:end]), nx, ny+1)
-    split_flux(q, lev) = reshape(@view(q[1:nu, lev]), nx+1, ny), reshape(@view(q[nu+1:end, lev]), nx, ny+1)
+    #split_flux(q) = reshape(@view(q[1:nu]), nx+1, ny), reshape(@view(q[nu+1:end]), nx, ny+1)
+    split_flux(q; lev=1) = reshape(@view(q[1:nu, lev]), nx+1, ny),
+                           reshape(@view(q[nu+1:end, lev]), nx, ny+1)
 
     if mg==1
         return UniformGrid(nx, ny, nΓ, nq, mg, offx, offy, len, h,

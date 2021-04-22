@@ -8,20 +8,29 @@ therefore be pre-computed as a pre-processing step.
 """
     rot!( Γ, q, grid )
 
-Transpose of discrete curl (R matrix)
+Transpose of discrete curl (R matrix in previous versions of the code)
 
 Γ = rot( q )
+
+Γwork should be (nx-1)×(ny-1)... this is preallocated in IBMatrices and
+wrapped into a LinearMap, so just call with
+
+Γ = C'*q
+
+where C is in the IBMatrices struct
 """
-function rot!( Γ, q, grid )
-    i = 2:grid.nx; j = 2:grid.ny
-    Γ = reshape(Γ, grid.nx-1, grid.ny-1)
-    qx, qy = grid.split_flux(q)
+function rot!( Γ, q, grid, Γwork )
+   Γ = reshape(Γ, grid.nx-1, grid.ny-1)
+   qx, qy = grid.split_flux(q)
 
-    #@views @. Γ[i-1, j-1] = qy[i, j] - qy[i-1, j] - qx[i, j] + qx[i, j-1]
-    @views broadcast!(+, Γ[i.-1, j.-1], qy[i, j], -qy[i.-1, j], -qx[i, j], qx[i, j.-1])
-    Γ = reshape(Γ, grid.nΓ, 1)
+   i = 2:grid.nx; j = 2:grid.ny
+   #@views broadcast!(-, Γ[i.-1, j.-1], qy[i, j].+qx[i, j.-1], qy[i.-1, j].+qx[i, j])
+   @views broadcast!(-, Γ[i.-1, j.-1], qx[i, j.-1], qx[i, j])
+   @views broadcast!(-, Γwork[i.-1, j.-1], qy[i, j], qy[i.-1, j])
+   @views @. Γ[i.-1, j.-1] += Γwork
+   Γ = reshape(Γ, grid.nΓ, 1)
 
-    return nothing
+   return nothing
 end
 
 """
@@ -30,6 +39,12 @@ end
 Discrete curl operator
 
 q = curl( ψ )
+
+This is wrapped into a LinearMap, so call with
+
+q = C * ψ
+
+where C is in the IBMatrices struct
 """
 function curl!( q, ψ, grid )
    nx, ny = grid.nx, grid.ny
@@ -38,14 +53,12 @@ function curl!( q, ψ, grid )
 
    # x-fluxes
    i=2:nx; j=2:ny-1
-   #@views @. qx[i, j] = ψ[i-1,j] - ψ[i-1, j-1]
    @views broadcast!(-, qx[i, j], ψ[i.-1,j], ψ[i.-1, j.-1])
    j=1;  @views @. qx[i, j] =  ψ[i.-1, j]     # Top boundary
    j=ny; @views @. qx[i, j] = -ψ[i.-1, j.-1]   # Bottom boundary
 
    # y-fluxes
    i=2:nx-1;  j=2:ny
-   #@views @. qy[i,j] = ψ[i-1,j-1] - ψ[i,j-1]
    @views broadcast!(-, qy[i,j], ψ[i.-1,j.-1], ψ[i,j.-1])
    i=1;  @views @. qy[i,j] = -ψ[i, j-1]          # Left boundary
    i=nx; @views @. qy[i,j] =  ψ[i-1, j-1]        # Right boundary
@@ -55,27 +68,6 @@ function curl!( q, ψ, grid )
     return nothing
 end
 
-function curl_OLD!( q, ψ, grid )
-   nx, ny = grid.nx, grid.ny
-   ψ = reshape(ψ, grid.nx-1, grid.ny-1)
-   qx, qy = grid.split_flux(q)
-
-   # x-fluxes
-   i=2:nx; j=2:ny-1
-   @views @. qx[i, j] = ψ[i-1,j] - ψ[i-1, j-1]
-   j=1;  @views @. qx[i, j] =  ψ[i-1, j]     # Top boundary
-   j=ny; @views @. qx[i, j] = -ψ[i-1, j-1]   # Bottom boundary
-
-   # y-fluxes
-   i=2:nx-1;  j=2:ny
-   @views @. qy[i,j] = ψ[i-1,j-1] - ψ[i,j-1]
-   i=1;  @views @. qy[i,j] = -ψ[i, j-1]          # Left boundary
-   i=nx; @views @. qy[i,j] =  ψ[i-1, j-1]        # Right boundary
-
-   ψ = reshape(ψ, grid.nΓ, 1)
-
-    return nothing
-end
 
 function curl!( q, ψ, ψbc, grid::MultiGrid )
    """
@@ -119,49 +111,6 @@ function curl!( q, ψ, ψbc, grid::MultiGrid )
     return nothing
 end
 
-
-function curl_OLD!( q, ψ, ψbc, grid::MultiGrid )
-   """
-   Compute velocity flux from streamfunction.
-    Note: requires streamfunction from coarser grid on edge
-          of current domain (stored in ψbc)
-   """
-   nx, ny = grid.nx, grid.ny
-   T, B, L, R = grid.TOP, grid.BOT, grid.LEFT, grid.RIGHT  # Constant offsets for indexing BCs
-   ψ = reshape(ψ, grid.nx-1, grid.ny-1)
-   qx, qy = grid.split_flux(q)
-
-   ### x-fluxes
-   i=2:nx; j=2:ny-1
-   @views @. qx[i, j] = ψ[i-1,j] - ψ[i-1, j-1]
-
-   # Top/bottom boundaries
-   j=1;  @views @. qx[i, j] = ψ[i-1, j] - ψbc[(B-1)+i]
-   j=ny; @views @. qx[i, j] = ψbc[i+T] - ψ[i-1, j-1]
-
-   # Left/right boundaries
-   j=1:ny;
-   i=1;     @views @. qx[i, j] = ψbc[(L+1)+j] - ψbc[L+j]
-   i=nx+1;  @views @. qx[i, j] = ψbc[(R+1)+j] - ψbc[R+j]
-
-   #### y-fluxes
-   i=2:nx-1;  j=2:ny
-   @views @. qy[i,j] = ψ[i-1,j-1] - ψ[i,j-1]
-
-   # Left/right boundaries
-   i=1;  @views @. qy[i,j] = -ψ[i, j-1][:] + ψbc[L+j]
-   i=nx; @views @. qy[i,j] = -ψbc[R+j] + ψ[i-1, j-1][:]
-
-   # Top/bottom boundaries
-   i=1:nx
-   j=1;    @views @. qy[i,j] = ψbc[B+i] - ψbc[(B+1)+i]
-   j=ny+1; @views @. qy[i,j] = ψbc[T+i] - ψbc[(T+1)+i]
-
-   ψ = reshape(ψ, grid.nΓ, 1)
-
-    return nothing
-end
-
 """
     vort2flux!( ψ, q, Γ, model::IBModel{UniformGrid, <:Body} )
 """
@@ -191,7 +140,8 @@ function vort2flux!( ψ, q, Γ, model::IBModel{MultiGrid, <:Body},
    grid = model.grid
    nx, ny = grid.nx, grid.ny
    ψbc = model.work.Γbc  # Same shape for both boundary conditions
-   Γwork = @view(model.work.Γ3[:, 1])  # Working memory
+   #Γwork = @view(model.work.Γ3[:, 1])  # Working memory
+   Γwork = model.work.Γ3  # Working memory
 
    #println("=== INSIDE VORT2FLUX ===")
 

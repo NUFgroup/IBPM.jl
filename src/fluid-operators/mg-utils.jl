@@ -59,6 +59,7 @@ function apply_bc!(r, rbc, fac, grid)
     return nothing
 end
 
+
 """
 !***************************************************************!
 !*   given vorticity on a smaller, fine mesh, (rhs) interp.    *!
@@ -68,7 +69,7 @@ end
 !***************************************************************!
 """
 function coarsify!(Γc, Γ, grid::MultiGrid)
-    """ 78.590 μs (8 allocations: 384 bytes) """
+    " 78.590 μs (8 allocations: 384 bytes) "
     nx, ny = grid.nx, grid.ny
     Γc = reshape(Γc, nx-1, ny-1)
     Γ  = reshape(Γ,  nx-1, ny-1)

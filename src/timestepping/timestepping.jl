@@ -127,11 +127,11 @@ function get_trial_state!(qs::AbstractArray,
     nonlinear!( state.nonlin[1], state, prob );
 
     # Explicit part of Laplacian
-    mul!(rhs, prob.A, state.Γ)
+    @views mul!(rhs, prob.A, state.Γ[:, 1])
 
     # Explicit nonlinear terms from multistep scheme
     for n=1:length(prob.scheme.β)
-        rhs .+= prob.scheme.β[n]*dt*state.nonlin[n];
+        rhs .+= prob.scheme.β[n]*dt*@view(state.nonlin[n][:, 1]);
     end
 
     # Trial circulation  Γs = Ainv * rhs
@@ -151,11 +151,11 @@ function get_trial_state!(qs::AbstractArray,
                           state::IBState{MultiGrid},
                           prob::IBProblem)
     dt = prob.scheme.dt
-    work = prob.model.work
     grid = prob.model.grid
-    rhsbc = work.rhsbc
-    rhs = @view(work.Γ2[:, 1])  # RHS of discretized equation
-    bc = work.Γbc;
+    rhsbc = prob.model.work.rhsbc
+    #rhs = @view(work.Γ2[:, 1])  # RHS of discretized equation
+    rhs = prob.model.work.Γ2  # RHS of discretized equation
+    bc = prob.model.work.Γbc
 
     for lev=grid.mg:-1:1
         bc .*= 0.0; rhsbc .*= 0.0
@@ -169,7 +169,6 @@ function get_trial_state!(qs::AbstractArray,
         end
 
         #compute the nonlinear term for the current time step
-        # THIS IS THE MOST EXPENSIVE THING NOW!!!
         @views nonlinear!( state.nonlin[1][:, lev], state, bc, lev, prob );
 
         @views mul!( rhs, prob.A[lev], state.Γ[:, lev] )
@@ -221,18 +220,15 @@ function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
                           qs::AbstractVector,
                           q0::AbstractVector,
                           prob::AbstractIBProblem)
-    #println("=== BOUNDARY FORCES ===")
     E = prob.model.mats.E
     h = prob.model.grid.h
 
-    qwork = @view(prob.model.work.q2[:, 1])  # Working memory for in-place operations
-    broadcast!(+, qwork, qs, q0)                     # qs + q0
-    mul!(F̃b, E, qwork)                               # E*(qs .+ state.q0)... using fb here as working array
-    #println(sum(q0.^2))
-    #println(sum(qs.^2))
-    #println(sum(F̃b.^2))
+    #qwork = @view(prob.model.work.q2[:, 1])  # Working memory for in-place operations
+    Q = prob.model.work.q2  # Net flux
+
+    broadcast!(+, Q, qs, q0)                     # qs + q0
+    mul!(F̃b, E, Q)                               # E*(qs .+ state.q0)... using fb here as working array
     F̃b .= prob.Binv*F̃b                         # Allocates a small amount of memory
-    #println(sum(F̃b.^2))
 
     return nothing
 end
@@ -256,14 +252,15 @@ function boundary_forces!(::Type{RotatingCyl},
     E = prob.model.mats.E
     h = prob.model.grid.h
 
-    # Working memory for in-place operations
+    # Working memory for in-place operations (small allocation)
     F̃work = similar(F̃b)
-    qwork = @view(prob.model.work.q2[:, 1])
+    #qwork = @view(prob.model.work.q2[:, 1])
+    Q = prob.model.work.q2   # Net flux
 
-    broadcast!(+, qwork, qs, q0)           # qs + q0
-    mul!(F̃work, E, qwork)                  # E*(qs .+ state.q0)
+    broadcast!(+, Q, qs, q0)           # qs + q0
+    mul!(F̃work, E, Q)                  # E*(qs .+ state.q0)
     F̃work .-= get_ub(prob.model.bodies)*prob.model.grid.h   # Enforce no-slip conditions
-    mul!(F̃b, prob.Binv, F̃work/h);
+    mul!(F̃b, prob.Binv, F̃work);
 
     return nothing
 end
@@ -291,7 +288,8 @@ function project_circ!(::Type{V} where V<:Motion,
     High-level version:
         state.Γ[:, 1] .= Γs .- prob.Ainv[1] * (mats.RET*fb_til_dt)
     """
-    Γwork = @view(prob.model.work.Γ3[:, 1]) # Working memory
+    #Γwork = @view(prob.model.work.Γ3[:, 1]) # Working memory
+    Γwork = prob.model.work.Γ2 # Working memory
     E, C = prob.model.mats.E, prob.model.mats.C
     fb_til_dt = state.F̃b
 
@@ -313,7 +311,8 @@ function project_circ!(::Type{V} where V<:Motion,
         state.Γ[:, 1] .= Γs .- prob.Ainv[1] * (mats.RET*fb_til_dt)
     """
     #println("=== PROJECT CIRC ===")
-    Γwork = @view(prob.model.work.Γ3[:, 1]) # Working memory
+    #Γwork = @view(prob.model.work.Γ3[:, 1]) # Working memory
+    Γwork = prob.model.work.Γ2 # Working memory
     E, C = prob.model.mats.E, prob.model.mats.C
     fb_til_dt = state.F̃b
 

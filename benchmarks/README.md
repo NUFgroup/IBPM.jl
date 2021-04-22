@@ -10,20 +10,18 @@ Script to run the validation case is `cyl40.jl`.
 | ----------- | ----------- | -----|
 | MATLAB      | 700       |  1.5738  |
 | C++   | 1164      | 1.5320  |
-| Fortran |  ~800  |  1.5377953  |
-| Julia (single-core)  | 691   |  1.5738 |
-| Julia (4 threads)  |  488   |  1.5738  |
-| Julia (Fortran port) | 491 | 1.5377938  |
+| Fortran |  800  |  1.5377953  |
+| Julia (Fortran port) | 471 | 1.5377938  |
 
 Single grid level:
 | Package      | Runtime (secs) |  $C_D$ |
 | ----------- | ----------- | -----|
 | Fortran |  278  |  2.5060811857143  |
-| Julia  | 345 | 2.5060811090446  |
+| Julia  | 159 | 2.5060811090446  |
 
 
 ### Re=20 cylinder (rotating)
-Compare different magainst C++ implementation (lab and body-fixed frames).
+Compare against C++ implementation (lab and body-fixed frames).
 Rotation is $\Omega = 0.1$ rad/s, which gives a theoretical prediction of $C_L = -0.157$ according to Kutta-Joukouski
 There are three different approaches to treating the cylinder:
 1. Keep the body fixed in the lab frame, but specify variable velocity.  The reg/interp operators don't need to be recomputed - only change is the RHS forcing term from body velocity

@@ -18,39 +18,29 @@ Re = 200.0
 Δt = 1e-3
 
 # Initialize motion
-Uinf(t) = sin(t);
-motion = ibpm.MovingGrid(Uinf, t -> 0.0, t-> 0.0)
+motion = ibpm.MovingGrid(t -> sin(t), t -> 0.0, t-> 0.0)
 
 # Create plate
 L = 1.0; # Plate length
 α = 90.0 * π/180.0;      # Angle of attack of plate
 x0, y0 = 0.0, 0.5
-bodies = [ibpm.make_plate( L, α, grid.h, x0, y0, motion; n=51 )]
+bodies = [ibpm.make_plate( L, α, grid.h, x0, y0; motion=motion, n=51 )]
 
 prob = ibpm.IBProblem(grid, bodies, Δt, Re);
-state = ibpm.IBstate(prob);
+state = ibpm.IBState(prob);
 
 T=2.0*2π
-timesteps = round(Int, T/Δt)
-println(timesteps)
+T = 1
+t = 0:Δt:T
+println(length(t))
 
+# Define a function to plot the plate as a grey line
+plot_body(body) = display( plot!(body.xb[:, 1], body.xb[:, 2],
+                                color=:grey, lw=5, legend=false) )
 
-function run_sim(it_stop, state, prob)
-    nplt = 50
-    big_iter = it_stop÷nplt
-    anim = @animate for i=1:big_iter
-        for j=1:nplt
-            it = nplt*i + j
-            t = prob.scheme.dt*it
-            ibpm.advance!(state, prob, t)
-        end
-        @show (nplt*i, state.CD, state.CL, state.cfl)
-        ibpm.plot_state(state, prob.model.grid; clims=(-5, 5))
-        display( plot!(prob.model.bodies[1].xb[:, 1], prob.model.bodies[1].xb[:, 2],
-            color=:grey, lw=10, legend=false) )
-    end
-    return anim
+# Run simulation and save the animation
+anim = ibpm.animated_sim(t, state, prob; output=100) do state, prob
+        ibpm.plot_state(state, prob.model.grid, clims=(-5, 5))  # Plot vorticity
+        plot_body(prob.model.bodies[1])
 end
-
-anim = run_sim(timesteps, state, prob) #advance to final time
-gif(anim, "examples/osc_plate.gif", fps = 30)
+gif(anim, "examples/osc_plate.gif", fps=30)

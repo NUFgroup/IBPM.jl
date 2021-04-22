@@ -16,9 +16,7 @@ include("interface-coupling/interface-coupling-include.jl")
 include("pre-processing/pre-processing-include.jl")
 include("fluid-operators/fluid-operators-include.jl")
 include("timestepping/timestepping-include.jl")
-"""
 include("plotting/plotting-include.jl")
-"""
 
 """
 Convenience function to solve the full problem and plot final solution
@@ -26,7 +24,7 @@ Convenience function to solve the full problem and plot final solution
 
 For more control, just use this as a template - see benchmarks and examples
 """
-function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
+function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1, body, Δt,
     Uinf=1.0, α=0.0, T=20.0*dt, plot=false)
     # MultiGrid
     grid = make_grid(nx, ny, offx, offy, len, mg=mg)
@@ -42,13 +40,11 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     cyls = [make_cylinder( r, grid.h, 0.0, 0.0; motion=motion )]
 
     prob = IBProblem(grid, cyls, Δt, Re, Uinf=Uinf, α=α);
-
     state = IBState(prob);
 
-    timesteps = round(Int, T/Δt)
-
-    run_sim(1, state, prob) #pre-compute stationary IB matrix before advancing
-    runtime = @elapsed run_sim(timesteps, state, prob) #advance to final time
+	t = 0:Δt:T
+    run_sim(t[1:2], state, prob) # Pre-compilation for benchmarking
+    runtime = @elapsed run_sim(t, state, prob) #advance to final time
 
     #plotting
     if plot==true
@@ -59,16 +55,27 @@ function IBPM_advance(Re, nx, ny, offx, offy, len; mg=1,body, Δt,
     return runtime
 end
 
-
-function run_sim(it_stop, state, prob)
-    for it=1:it_stop
-        t = prob.scheme.dt*it
-    	advance!(state, prob, t)
-        @show (it, state.CD, state.CL, state.cfl)
-        if mod(it,20) == 0
-            @show (it, state.CD, state.CL, state.cfl)
+function run_sim(t, state, prob; output=1, callback=(state, prob)->nothing)
+	for i=1:length(t)
+		ibpm.advance!(state, prob, t[i])
+        if mod(i,output) == 0
+			callback(state, prob);  # Primitive callback, can be used for plotting or other output
+            @show (t[i], state.CD, state.CL, state.cfl)
         end
+	end
+end
+
+function animated_sim(update_plot, t, state, prob;
+		nplt=100,
+		output=1,
+		callback=(state, prob)->nothing)
+    n_iter = length(t)÷nplt
+    anim = @animate for i=1:n_iter
+		sim_idx = (i-1)*nplt.+(1:nplt)
+		run_sim( @view(t[sim_idx]), state, prob; output=output, callback=callback )
+		update_plot(state, prob)
     end
+	return anim
 end
 
 end

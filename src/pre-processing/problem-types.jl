@@ -97,10 +97,9 @@ function base_flux!(::Type{T} where T <: InertialMotion,
                     t::Float64)
     grid = prob.model.grid
     Uinf, α = prob.model.Uinf, prob.model.α
-    m = grid.nx;
-    n = grid.ny;
-    state.q0[ 1:(m+1)*n ] .= Uinf * grid.h * cos(α);  # x-flux
-    state.q0[ (m+1)*n+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
+    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
+    state.q0[ 1:nu ] .= Uinf * grid.h * cos(α);  # x-flux
+    state.q0[ nu+1:end ] .= Uinf * grid.h * sin(α);  # y-flux
 end
 
 "Initialize irrotational freestream flux when not time-varying"
@@ -110,15 +109,14 @@ function base_flux!(::Type{T} where T <: InertialMotion,
                     t::Float64)
     grid = prob.model.grid
     Uinf, α = prob.model.Uinf, prob.model.α
-    m = grid.nx;
-    n = grid.ny;
+    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
     for lev = 1 : grid.mg
         # Coarse grid spacing
         hc = grid.h * 2^( lev - 1 );
 
         # write fluid velocity flux in body-fixed frame
-        state.q0[ 1:(m+1)*n, lev ] .= Uinf * hc * cos(α);      # x-flux
-        state.q0[ (m+1)*n+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
+        state.q0[ 1:nu, lev ] .= Uinf * hc * cos(α);      # x-flux
+        state.q0[ nu+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
     end
 end
 
@@ -131,7 +129,8 @@ function base_flux!(::Type{MovingGrid},
     grid = prob.model.grid
     XX, YY = prob.model.XX, prob.model.YY;
     motion = prob.model.bodies[1].motion
-    nu = grid.ny*(grid.nx-1);  # Number of x-flux points
+    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
+    nq = grid.nq
 
     ### Rotational part
     Ω = -motion.θ̇(t)
@@ -139,21 +138,20 @@ function base_flux!(::Type{MovingGrid},
     nx, ny, h = grid.nx, grid.ny, grid.h;
 
     ### x-flux
-    # TODO: CHECK OFFSETS FOR THESE
-    #y = h*(1:ny) .- grid.offy
-    #YY = ones(nx-1)*y'
-    state.q0[1:nu, 1] .= -h*Ω*YY[:]
+    #state.q0[1:nu, 1] .= -h*Ω*YY[:]
+    @views state.q0[1:nu] .= YY[:]
+    @views state.q0[1:nu] .*= -h*Ω
 
     ### y-flux
-    #x = h*(1:nx) .- grid.offx
-    #XX = x*ones(ny-1)'
-    state.q0[nu+1:grid.nq, 1] .= h*Ω*XX[:]
+    #state.q0[nu+1:end, 1] .= h*Ω*XX[:]
+    @views state.q0[(nu+1):end] .= XX[:]
+    @views state.q0[nu+1:nq] .*= h*Ω
 
     ### Potential flow part
     Ux0 = motion.U(t)*cos(α)
     Uy0 = motion.U(t)*sin(α)
-    state.q0[1:nu, 1] .+= h*Ux0          # x-flux
-    state.q0[nu+1:grid.nq, 1] .+= h*Uy0  # y-velocity
+    @views state.q0[1:nu, 1] .+= h*Ux0          # x-flux
+    @views state.q0[nu+1:nq, 1] .+= h*Uy0  # y-velocity
 end
 
 "Update time-varying background flux for moving grid"
@@ -165,7 +163,8 @@ function base_flux!(::Type{MovingGrid},
     grid = prob.model.grid
     motion = prob.model.bodies[1].motion
     XX, YY = prob.model.XX, prob.model.YY;
-    nu = grid.ny*(grid.nx-1);  # Number of x-flux points
+    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
+    nq = grid.nq
 
     ### Rotational part
     Ω = -motion.θ̇(t)
@@ -180,13 +179,15 @@ function base_flux!(::Type{MovingGrid},
         hc = grid.h*2^(lev-1);  # Coarse grid spacing
 
         ### x-fluxes
-        state.q0[1:nu, lev] .= -hc*Ω*YY[:, lev]
+        @views state.q0[1:nu, lev] .= YY[:, lev]
+        @views state.q0[1:nu, lev] .*= -hc*Ω
 
         ### y-fluxes
-        state.q0[nu+1:end, lev] .= hc*Ω*XX[:, lev]
+        @views state.q0[(nu+1):nq, lev] .= XX[:, lev]
+        @views state.q0[(nu+1):nq, lev] .*= hc*Ω
 
         ### Irrotational part
-        state.q0[1:nu, lev] .+= hc*Ux0      # x-flux
-        state.q0[nu+1:end, lev] .+= hc*Uy0  # y-velocity
+        @views state.q0[1:nu, lev] .+= hc*Ux0      # x-flux
+        @views state.q0[(nu+1):nq, lev] .+= hc*Uy0  # y-velocity
     end
 end

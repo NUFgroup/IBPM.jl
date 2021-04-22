@@ -26,6 +26,7 @@ function get_lap_inv( grid::T,
                       dst_plan::Tuple{Any, Array{Float64, 2}}) where T <: Grid
     nx, ny = grid.nx, grid.ny
     # give output in same size as input b (before being reshaped)
+
     return LinearMap(grid.nΓ; issymmetric=true, ismutating=true) do x, b
         # reshape for inversion in fourier space
         b = reshape( b, nx-1, ny-1)
@@ -108,7 +109,6 @@ function get_Binv(model::IBModel{<:Grid, RigidBody{T}} where T <: Motion, Ainv::
         B_times!( b, e, Ainv, model, Γ, ψ, q );
         B[:, j] = b
     end
-    println(sum(B.^2))
     #sleep(100)
     return inv(B)
 end
@@ -160,7 +160,7 @@ function B_times!(x::Array{Float64, 1},
 
     # Get circulation from surface stress
     Γ[:, 1] = Ainv * ( (E*C)'*z )    # Γ = ∇ x (E'*fb)
-
+    
     #-- get vel flux from circulation
     vort2flux!( ψ, q, Γ, model, model.grid.mg );
 
