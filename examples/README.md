@@ -3,12 +3,12 @@
 Some demonstrations of basic functionality
 
 ### Re=100 cylinder wake
-![Cylinder wake](cyl_100.gif)
+<img src="cyl_100.gif" alt="Cylinder wake" width="400"/>
 
 ### Oscillating plate
 
-![Oscillating plate](osc_plate.gif)
+<img src="osc_plate.gif" alt="Oscillating plate" width="400"/>
 
 ### Pitching NACA 0012 airfoil
 
-![Pitching 0012](pitching_naca.gif)
+<img src="pitching_naca.gif" alt="Pitching 0012" width="400"/>
