@@ -29,18 +29,15 @@ cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0 )]
 prob = ibpm.IBProblem(grid, cyls, Δt, Re, Uinf=Uinf);
 state = ibpm.IBState(prob);
 
-T=100.0
-timesteps = round(Int, T/Δt)
+T=300.0
+t = 0:Δt:T
 
-function run_sim(it_stop, state, prob)
-    for it=1:it_stop
-        t = prob.scheme.dt*it
-        ibpm.advance!(state, prob, t)
-        if mod(it,20) == 0
-            @show (it, state.CD, state.CL, state.cfl)
-            ibpm.plot_state(state, prob.model.grid; clims=(-3, 3))
-        end
-    end
+ibpm.run_sim(t[1:2], state, prob) # Pre-compile
+
+# Run simulation and save the animation
+anim = ibpm.animated_sim(t, state, prob; output=20) do state, prob
+        ibpm.plot_state(state, prob.model.grid, clims=(-3, 3))  # Plot vorticity
+        ibpm.plot_cyl(prob.model.bodies[1]);
 end
 
-runtime = @elapsed run_sim(timesteps, state, prob) #advance to final time
+gif(anim, "examples/cyl_100.gif", fps=10)

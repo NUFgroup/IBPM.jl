@@ -222,6 +222,10 @@ function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
                           prob::AbstractIBProblem)
     E = prob.model.mats.E
     h = prob.model.grid.h
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 73e5958f43c9225867bd941e9556f7b5f12a1899
 
     #qwork = @view(prob.model.work.q2[:, 1])  # Working memory for in-place operations
     Q = prob.model.work.q2  # Net flux
@@ -231,6 +235,17 @@ function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
     F̃b .= prob.Binv*F̃b                         # Allocates a small amount of memory
 
     return nothing
+<<<<<<< HEAD
+=======
+=======
+    # Working memory for in-place operations
+    qwork = @view(prob.work.q2[:, 1])
+    broadcast!(+, qwork, qs, q0)                     # qs + q0
+    mul!(F̃b, E, qwork)                               # E*(qs .+ state.q0)... using fb here as working array
+    F̃b .= (1/h)*prob.Binv*F̃b                         # Allocates a small amount of memory
+    #F̃b .= (1/h)*(prob.Binv\F̃b)                      # USE WITH CHOLESKY
+>>>>>>> main
+>>>>>>> 73e5958f43c9225867bd941e9556f7b5f12a1899
 end
 
 """

@@ -31,10 +31,10 @@ spec = "0012"
 bodies = [ibpm.make_naca(x0, nb, spec, motion=motion)]
 
 prob = ibpm.IBProblem(grid, bodies, Δt, Re);
-state = ibpm.IBstate(prob);
+state = ibpm.IBState(prob);
 
 T=2.0*(2π/ω)
-timesteps = round(Int, T/Δt)
+t=0:Δt:T
 println(timesteps)
 
 function plot_naca(body)
@@ -44,25 +44,12 @@ function plot_naca(body)
     yL = body.xb[end:-1:nb+1, 2]
     yC = 0.5*(yU + yL)  # Camber line
     yT = 0.5*(yU - yL)  # Thickness
-    plot!(xC, yC, ribbon=yT,
-        color=:grey, lw=0, fillalpha=1.0, legend=false)
+    display( plot!(xC, yC, ribbon=yT,
+        color=:grey, lw=0, fillalpha=1.0, legend=false) )
 end
 
-function run_sim(it_stop, state, prob)
-    nplt = 100
-    plt_iter = it_stop÷nplt
-    anim = @animate for i=1:plt_iter
-        for j=1:nplt
-            it = nplt*(i-1) + j
-            t = prob.scheme.dt*it
-            ibpm.advance!(state, prob, t)
-        end
-        @show (nplt*i, state.CD, state.CL, state.cfl)
-        ibpm.plot_state(state, prob.model.grid; clims=(-5, 5), lev=1)
-        display( plot_naca(prob.model.bodies[1]) )
-    end
-    return anim
+anim = ibpm.animated_sim(t, state, prob; output=100) do state, prob
+    ibpm.plot_state(state, prob.model.grid, clims=(-5, 5))  # Plot vorticity
+    plot_naca(prob.model.bodies[1])
 end
-
-anim = run_sim(timesteps, state, prob) #advance to final time
 gif(anim, "examples/pitching_naca.gif", fps = 30)

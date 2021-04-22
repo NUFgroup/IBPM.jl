@@ -16,7 +16,7 @@ function plot_state(state::IBState, grid::T; clims=nothing, lev=1) where T <:Gri
         framestyle=:box, clims=clims))
 end
 
-function plot_body(body)
+function plot_cyl(body)
     display(plot!(body.xb[:, 1], body.xb[:, 2], lw=0, fillrange=0.0,
         fillcolor=:gray, legend=false))
 end
