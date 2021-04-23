@@ -120,7 +120,7 @@ end
 
 
 
-function get_Binv(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion, Ainv::LinearMap)
+function get_Binv(model::IBModel{MultiGrid, RigidBody{MotionFunction}}, Ainv::LinearMap)
     nb, nf = get_body_info(model.bodies)
     nftot = sum(nf)
 
