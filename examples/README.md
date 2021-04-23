@@ -7,7 +7,7 @@ Some demonstrations of basic functionality
 
 ### Oscillating plate
 
-<img src="osc_plate.gif" alt="Oscillating plate" width="400"/>
+<img src="osc_plate_motion.gif" alt="Oscillating plate" width="400"/>
 
 ### Pitching NACA 0012 airfoil
 

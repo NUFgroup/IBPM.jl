@@ -2,7 +2,7 @@
 
 Julia CFD package based on the Immersed Boundary Projection Method (IBPM) from Taira & Colonius (2007), with multigrid method from Colonius & Taira (2008).
 
-<img src="examples/osc_plate.gif" alt="Oscillating plate" width="400"/>
+<img src="examples/osc_plate_motion.gif" alt="Oscillating plate" width="400"/>
 
 Oscillating plate simulated in body-fixed coordinates. See "Examples" folder for other example cases.
 
