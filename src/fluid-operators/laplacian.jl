@@ -39,6 +39,16 @@ function get_lap_inv( grid::T,
         x .= reshape( x_temp, size(x) )
         return nothing
     end
+
+    """# WITH FFTW.UNALIGNED
+    return LinearMap(grid.nΓ; issymmetric=true, ismutating=true) do x, b
+        # reshape for inversion in fourier space
+        b = reshape( b, grid.nx-1, grid.ny-1)
+        x = reshape( x, grid.nx-1, grid.ny-1)
+        dst_inv!(x, b_temp, Λ, dst_plan; scale=1/(4*nx*ny)); # Include scale to make fwd/inv transforms equal
+        x = reshape( x, grid.nΓ, 1 )
+        return nothing
+    end"""
 end
 
 """
@@ -106,6 +116,28 @@ function get_Binv(model::IBModel{<:Grid, RigidBody{T}} where T <: Motion, Ainv::
     end
     #sleep(100)
     return inv(B)
+end
+
+
+
+function get_Binv(model::IBModel{MultiGrid, RigidBody{T}} where T <: Motion, Ainv::LinearMap)
+    nb, nf = get_body_info(model.bodies)
+    nftot = sum(nf)
+
+    # TODO: Alternative... could create a dummy state to operate on here
+    Γ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for circulation
+    ψ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for streamfunction
+    q = zeros(model.grid.nq, model.grid.mg)    # Working array for velocity flux
+
+    # f = B*g
+    B = LinearMap((f, g) -> B_times!(f, g, Ainv[1], model, Γ, ψ, q),
+                  nftot; issymmetric=true, ismutating=true)
+
+    # solves f = B*g for g... so g = Binv * f
+    Binv = LinearMap((f, g) -> cg!(f, B, g, maxiter=5000, reltol=1e-12),
+                     nftot; issymmetric=true, ismutating=true)
+
+    return Binv
 end
 
 function B_times!(x::Array{Float64, 1},

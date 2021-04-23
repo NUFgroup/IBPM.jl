@@ -138,9 +138,7 @@ end
 """
     boundary_forces!(::Type{RotatingCyl}, F̃b, qs, q0, prob)
 
-Solve the Poisson problem for bc2 = 0 with special case of rotating cylinder.
-
-In this case the points don't need to move, but they do have nonzero velocity
+Solve the Poisson problem for bc2 = 0 (???) with nonzero boundary velocity ub
 ```
 Bf̃ = Eq - ub
    = ECψ - ub
@@ -189,7 +187,7 @@ function project_circ!(::Type{V} where V<:Motion,
 
     # Low-level version:
     state.Γ .= Γs
-    @views mul!( Γs[:, 1], (E*C)', state.F̃b[:])  # Γ = ∇ x (E'*fb)
+    @views mul!( Γs[:, 1], (E*C)', state.F̃b[:, 1])  # Γ = ∇ x (E'*fb)
     @views mul!( Γwork, prob.Ainv[1], Γs[:, 1])
 
     state.Γ[:, 1] .-= Γwork

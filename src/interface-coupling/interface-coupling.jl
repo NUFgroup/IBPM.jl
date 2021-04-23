@@ -102,13 +102,21 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
 
     " Matrix E' "
     function reg!(q, fb)
-        q .*= 0.0
+        q .= 0.0
         fb = reshape(fb, nb, 2)
         qx, qy = grid.split_flux(q)
         for k=1:nb
             i=body_idx[k, 1].+supp_idx; j=body_idx[k, 2].+supp_idx
             @views qx[i, j] += weight[k, 1, :, :]*fb[k, 1]
             @views qy[i, j] += weight[k, 2, :, :]*fb[k, 2]
+
+            if ~isfinite(sum(qx[i, j].^2))
+                println("ET")
+                println(k)
+                println(sum(weight[k, 1, :, :].^2))
+                println(fb[k, 1])
+                sleep(100)
+            end
         end
         fb = reshape(fb, 2*nb, 1)
         return nothing
@@ -116,7 +124,7 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
 
     " Matrix E "
     function regT!(fb, q)
-        fb .*= 0.0
+        fb .= 0.0
         fb = reshape(fb, nb, 2)
         qx, qy = grid.split_flux(q)
         for k=1:nb

@@ -27,7 +27,7 @@ function rot!( Γ, q, grid, Γwork )
    #@views broadcast!(-, Γ[i.-1, j.-1], qy[i, j].+qx[i, j.-1], qy[i.-1, j].+qx[i, j])
    @views broadcast!(-, Γ[i.-1, j.-1], qx[i, j.-1], qx[i, j])
    @views broadcast!(-, Γwork[i.-1, j.-1], qy[i, j], qy[i.-1, j])
-   @views @. Γ[i.-1, j.-1] += Γwork
+   @views @. Γ[i.-1, j.-1] += Γwork[i.-1, j.-1]
    Γ = reshape(Γ, grid.nΓ, 1)
 
    return nothing
