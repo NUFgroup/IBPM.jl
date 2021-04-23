@@ -136,7 +136,7 @@ function boundary_forces!(::Union{Type{Static}, Type{MovingGrid}},
 end
 
 """
-    boundary_forces!(::Type{RotatingCyl}, F̃b, qs, q0, prob)
+    boundary_forces!(::Type{V} where V <: Motion, F̃b, qs, q0, prob)
 
 Solve the Poisson problem for bc2 = 0 (???) with nonzero boundary velocity ub
 ```
@@ -144,7 +144,7 @@ Bf̃ = Eq - ub
    = ECψ - ub
 ```
 """
-function boundary_forces!(::Type{RotatingCyl},
+function boundary_forces!(::Type{V} where V <: Motion,
                           F̃b, qs, q0, prob)
     # Working memory for in-place operations (small allocation)
     F̃work = similar(F̃b)

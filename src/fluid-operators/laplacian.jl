@@ -130,7 +130,7 @@ function get_Binv(model::IBModel{MultiGrid, RigidBody{MotionFunction}}, Ainv::Li
     q = zeros(model.grid.nq, model.grid.mg)    # Working array for velocity flux
 
     # f = B*g
-    B = LinearMap((f, g) -> B_times!(f, g, Ainv[1], model, Γ, ψ, q),
+    B = LinearMap((f, g) -> B_times!(f, g, Ainv, model, Γ, ψ, q),
                   nftot; issymmetric=true, ismutating=true)
 
     # solves f = B*g for g... so g = Binv * f
@@ -140,8 +140,8 @@ function get_Binv(model::IBModel{MultiGrid, RigidBody{MotionFunction}}, Ainv::Li
     return Binv
 end
 
-function B_times!(x::Array{Float64, 1},
-                  z::Array{Float64, 1},
+function B_times!(x::AbstractVector,
+                  z::AbstractVector,
                   Ainv::LinearMap,
                   model::IBModel{MultiGrid, RigidBody{T}} where T<:Motion,
                   Γ::Array{Float64, 2},
