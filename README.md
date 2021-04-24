@@ -4,11 +4,9 @@ Julia CFD package based on the Immersed Boundary Projection Method (IBPM) from T
 
 <img src="examples/osc_plate_motion.gif" alt="Oscillating plate" width="400"/>
 
-Oscillating plate simulated in body-fixed coordinates. See "Examples" folder for other example cases.
+Oscillating plate at Reynolds number 200. See "Examples" folder for other example cases.
 
 ### Overview
-
-The package is generally structured after the hierarchy of the C++ package, with appropriate modifications for Julia (i.e. composite types and multiple dispatch instead of object-oriented).  
 
 * __Bodies__: the bodies are a collection of boundary points at which the no-slip conditions are enforced, along with a Motion (currently only Static "motion" is supported).  The `structure-domain/sample-bodies.jl` file also has utilities to make a couple of basic bodies (a cylinder and 4-digit NACA airfoils, for instance).
 * __Model__: the model is a structure to hold information about the domain - the grid, an array of bodies, pre-allocated working memory, and any matrices and operators that can be precomputed.  In other words, everything short of the time discretization belongs to the Model

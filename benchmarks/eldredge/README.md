@@ -40,7 +40,10 @@ That's about a 2e-7 relative difference between the Julia and Fortran
 | C++ (lab frame)  |  28045   |
 | C++ (body-fixed)  |    1759 |
 | Fortran | 1601  |
+| Julia  (lab frame)  |  65867  |
 | Julia    |  1098  |
+
+
 
 30% speedup over C++ and 25% over Fortran!
 

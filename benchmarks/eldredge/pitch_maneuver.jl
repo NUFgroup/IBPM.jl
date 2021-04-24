@@ -71,7 +71,7 @@ runtime = @elapsed run_sim(t, F, state, prob)
 
 CD = @. F[:, 1]*cos(θ(t)) - F[:, 2]*sin(θ(t))
 CL = @. F[:, 1]*sin(θ(t)) + F[:, 2]*cos(θ(t))
-matwrite("benchmarks/eldredge/results/force_jl.mat", Dict(
+matwrite("benchmarks/eldredge/results/force_jl2.mat", Dict(
 	"t" => Array(t),
 	"CL" => CL,
 	"CD" => CD,

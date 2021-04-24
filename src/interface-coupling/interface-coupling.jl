@@ -86,11 +86,6 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
     body_idx[:, 1] .= @. Int(floor( (xb[:, 1]+grid.offx)/h ))
     body_idx[:, 2] .= @. Int(floor( (xb[:, 2]+grid.offy)/h ))
 
-    k, l, m = 1, 6, 5
-
-    x = @. h*(body_idx[k, 1]-1+supp_idx)-grid.offx       # grid location x
-    y = @. h*(body_idx[k, 2]-1+supp_idx')-grid.offy       # grid location y
-
     # get regularized weight near IB points (u-vel points)
     for k=1:nb
         x = @. h*(body_idx[k, 1]-1+supp_idx)-grid.offx       # grid location x
@@ -110,6 +105,7 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
             @views qx[i, j] += weight[k, 1, :, :]*fb[k, 1]
             @views qy[i, j] += weight[k, 2, :, :]*fb[k, 2]
 
+            # Should be safe to remove this now
             if ~isfinite(sum(qx[i, j].^2))
                 println("ET")
                 println(k)
