@@ -6,7 +6,7 @@ changed to quarter chord.
 
 ![Pitch maneuver](AoA_traj.png)
 
-![Full solution](results/eldredge.gif)
+![Full solution](results/eldredge_motion.gif)
 
 There are four relevant scripts here:
 
