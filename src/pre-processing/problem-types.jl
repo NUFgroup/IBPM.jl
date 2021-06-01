@@ -166,7 +166,7 @@ mutable struct IBState{T<:Grid} <: State
         nonlin::Array{Array{Float64, 2}, 1}  # Memory of nonlinear terms
         fb::Array{Array{Float64, 1}, 1}          # Surface stresses
         F̃b::Array{Float64, 1}                    # Body forces * dt
-        CD::Array{Float64, 1}    # Drag coefficient
+        CD::Array{Float64, 2}    # Drag coefficient
         CL::Array{Float64, 1}    # Lift coefficient
         cfl::Float64
         slip::Float64

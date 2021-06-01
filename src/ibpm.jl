@@ -5,6 +5,7 @@ using SparseArrays
 using FFTW
 using LinearMaps
 using IterativeSolvers
+using JLD2
 
 export IBPM_advance
 
@@ -50,6 +51,8 @@ function IBPM_advance(Re, boundary, freestream=(Ux=1.0,);
 
         run_sim(1, state, prob) #pre-compute IB matrix before advancing
         runtime = @elapsed run_sim(timesteps, state, prob) #march to final time
+
+        @save "./save_vars.jld2" {compress=true} state prob
     #--
 
     #--plotting
@@ -70,7 +73,7 @@ function run_sim(it_stop, state, prob)
         t = prob.scheme.dt*it
         advance!(t, state, prob)
         if mod(it,20) == 0
-            @show (it, state.CD, state.CL, state.cfl)
+            @show (it, state.CD[it,1], state.CL, state.cfl)
         end
     end
 end

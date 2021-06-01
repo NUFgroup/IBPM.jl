@@ -11,8 +11,8 @@ freestream = (Ux=t->t^0.0,) #freestream conditions
 
 #simulation parameters (these are all optional)
 Δx = 0.02 #Default gives a grid Re of 2
-Δt = missing #default aims for a CFL of 0.1 with a
-          #fairly conservative safety factory on max vel
+Δt = missing #default (==missing) aims for a CFL of 0.1 with a
+          #fairly conservative safety factor on max vel
 mg=5      #Number of sub-domains. Default is 5
 
 
@@ -23,4 +23,4 @@ r = 0.5; # Cylinder radius
 motion = "static"
 body = (type="cylinder", lengthscale=r, motion=motion)
 runtime = IBPM_advance( Re, boundary, freestream, Δx=Δx,
-    body=body, Δt=Δt, T=1.0, plot=true )
+    body=body, Δt=Δt, T=0.05, plot=true )

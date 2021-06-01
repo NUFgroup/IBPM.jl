@@ -21,7 +21,7 @@ function init_state(prob::IBProblem)
         [zeros(grid.nΓ, mg) for i=1:length(prob.scheme.β)],   # Nonlinear
         [zeros(nf[i]) for i=1:length(nf)],   # Surface stresses on each body
         zeros(sum(nf)),
-        zeros(length(prob.model.bodies)),
+        [zeros(length(prob.model.bodies))';],
         zeros(length(prob.model.bodies)),
         0.0,
         0.0

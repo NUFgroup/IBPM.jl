@@ -372,14 +372,15 @@ function update_stress!(state::IBState,
 
     # Store surface stress and integrated forces
     nbod_tally = 0; #  Used to keep a tally of which body we're on
+    state.CD = [state.CD; zeros(length(prob.model.bodies))]
     for j = 1 : length(prob.model.bodies)
         ds = prob.model.bodies[j].ds
         # surface stresses
-        state.fb[j] .= fb_til_dt[nbod_tally .+ (1:nf[j])] *(h / dt) ./ [ds; ds] ;
+        state.fb[j] .= fb_til_dt[nbod_tally .+ (1:nf[j])] *(h / dt) ./ [ds; ds]
 
         # integrated forces
-        state.CD[j] = 2 * sum( ds .* state.fb[j][1 : nb[j]] ) ;
-        state.CL[j] = 2 * sum( ds .* state.fb[j][1 .+ nb[j] : nf[j] ] ) ;
+        state.CD[size(state.CD,1),j] = 2 * sum( ds .* state.fb[j][1 : nb[j]] )
+        state.CL[j] = 2 * sum( ds .* state.fb[j][1 .+ nb[j] : nf[j] ] )
 
         # update body index
         nbod_tally += nf[j];
