@@ -2,38 +2,20 @@
 
 Julia CFD package based on the Immersed Boundary Projection Method (IBPM) from Taira & Colonius (2007), with multigrid method from Colonius & Taira (2008).
 
+<img src="examples/osc_plate_motion.gif" alt="Oscillating plate" width="400"/>
+
+Oscillating plate at Reynolds number 200. See "Examples" folder for other example cases.
+
 ### Overview
 
-The package is generally structured after the hierarchy of the C++ package, with appropriate modifications for Julia (i.e. composite types and multiple dispatch instead of object-oriented).  
-
-* __Bodies__: the bodies are a collection of boundary points at which the no-slip conditions are enforced, along with a Motion (currently only Static "motion" is supported).  The `ib_domain.jl` file also has utilities to make a couple of basic bodies (a cylinder and 4-digit NACA airfoils, for instance).
-* __Model__: the Navier-Stokes model is a structure to hold information about the domain - the grid, an array of bodies, and any matrices and operators that can be precomputed.
-* __Problem__: Ideally this could interface with the DifferentialEquations.jl package eventually, so a "IBPMProblem" is defined in the same spirit as the "ODEProblem".  This combines a Model with precomputed operators relevant for advancing the state and pre-allocated working memory
+* __Bodies__: the bodies are a collection of boundary points at which the no-slip conditions are enforced, along with a Motion (currently only Static "motion" is supported).  The `structure-domain/sample-bodies.jl` file also has utilities to make a couple of basic bodies (a cylinder and 4-digit NACA airfoils, for instance).
+* __Model__: the model is a structure to hold information about the domain - the grid, an array of bodies, pre-allocated working memory, and any matrices and operators that can be precomputed.  In other words, everything short of the time discretization belongs to the Model
+* __Problem__: Ideally this could interface with the DifferentialEquations.jl package eventually, so a "IBProblem" is defined in the same spirit as the "ODEProblem".  This combines a Model with precomputed operators relevant for advancing the state.
 * __State__: This is just a collection of pre-allocated arrays to store the vorticity, streamfunction, velocity flux, and body forces (including lift and drag).  It also has storage for the "memory" of the multi-step scheme for the nonlinear terms.  
 
-Once a Problem and State are defined, the basic time-stepping is to just call `advance!(state, prob)`
+Once a Problem and State are defined, the basic time-stepping is to just call `advance!(state, prob, t)`.  There are also some helpful functions in `ibpm.jl` to run the full simulation, for instance to save a GIF of the solution.
 
-### Current Status (12/21/2020)
-Single- and multi-grid versions have both been tested and optimized.  Currently only fixed, rigid bodies are supported and there is no support for adjoints, automatic differentiation, etc.
+### Current Status (4/22/21)
+Currently only rigid bodies have been implemented, although a single moving body can be simulated by moving the grid (a "body-fixed" reference frame, although the equations are in the inertial lab frame).  The reference cases (see the benchmarks folder) match the Fortran implementation to within $10^{-6}$ relative error, but with an average of about 40% speedup (and slightly more compared to the C++ code).
 
-I tried parallelizing for loops in `nonlin` and `multigrid_utils` with the `@threads` macro, but it actually ran slower (on my laptop with 4 threads).  I think this is because of shared memory issues.  BLAS should be multi-threaded by default (start julia with `-t {nproc}`)
-
-### Next Steps
-
-*  Motion: add support for moving, rigid bodies.  This could be tested first with a rotating cylinder, so the regularization/interpolation matrices don't need to be recomputed (only the Poisson problem changes).
-*  Control: once rotating cylinders are supported, implement fluidic pinball and MIMO control
-* Fluid-structure interaction: add support for strongly-coupled method from Goza & Colonius (2018)
-* Steady-states and stability analysis with SFD and Krylov-Schur.
-* Adjoint-based optimization: start with a simpler problem in Julia (e.g. potential flow or Ginzburg-Landau).  Goals: design optimization, optimal control, sensitivity analysis, Newton-Krylov steady-state solver...
-* Automatic differentiation: what needs to happen here?  How are the requirements different from adjoints?  And what sort of ML goals should be supported?
-* Reduced-order modeling: add a parallel package for POD, DMD, Galerkin projection, LSPC, etc.
-
-### Validation
-Compared against C++ and MATLAB implementations on benchmark case from Colonius & Taira (2008) with $n_b=78$ points on the cylinder.  Script to run the validation case (`cyl40.jl`) is in example folder. 
-
-| Package      | Runtime (secs) |  $C_D$ |
-| ----------- | ----------- | -----|
-| MATLAB      | 700       |  1.5738  |
-| C++   | 1164      | 1.5320  |
-| Julia (single-core)  | 691   |  1.5738 |
-| Julia (4 threads)  |  488   |  1.5738  |
+The next plans include arbitrary motion (with a fixed grid), parallelization, and adding an FSI solver for flexible bodies.
