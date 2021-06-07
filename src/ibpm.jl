@@ -24,8 +24,8 @@ Convenience function to solve the full problem and plot final solution
 
 For more control, just use this as a template - see benchmarks and examples
 """
-function IBPM_advance(Re, boundary, freestream=(Ux=1.0,);
-    Δx=missing, mg=5,body, Δt=missing, T=20.0*dt, plot=false)
+function IBPM_advance(Re, boundary, body, freestream=(Ux=1.0,);
+    Δx=missing, mg=5, Δt=missing, T=20.0*dt, plot=false)
 
     #--extract user params to sim variables
         Δx, Δt, T, freestream = read_user_vars(Δt, Δx, freestream, Re, T)
@@ -35,17 +35,17 @@ function IBPM_advance(Re, boundary, freestream=(Ux=1.0,);
         grid =  make_grid(Δx, boundary, mg=mg)
     #--
 
-    #Make body
-    r = body.lengthscale
+    # #Make body
+    # r = body.lengthscale
+    #
+    # if body.motion == "static"
+    #     motion=Static()
+    # elseif body.motion == "rot_cyl"
+    #     motion=RotatingCyl(body.θ̇)
+    # end
+    # cyls = [make_cylinder( r, grid.h, 0.0, 0.0; motion=motion )]
 
-    if body.motion == "static"
-        motion=Static()
-    elseif body.motion == "rot_cyl"
-        motion=RotatingCyl(body.θ̇)
-    end
-    cyls = [make_cylinder( r, grid.h, 0.0, 0.0; motion=motion )]
-
-    prob = IBProblem(grid, cyls, Δt, Re, freestream=freestream);
+    prob = IBProblem(grid, body, Δt, Re, freestream=freestream);
     state = IBState(prob);
 
 	t = 0:Δt:T

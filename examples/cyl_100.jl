@@ -16,15 +16,16 @@ freestream = (Ux=t->t^0.0,) #freestream conditions
 mg=5      #Number of sub-domains. Default is 5
 
 
-
 # Create an array of one cylinder
 # Create cylinder
 r = 0.5; # Cylinder radius
 # Create an array of one cylinder
-motion = "static"
-body = (type="cylinder", lengthscale=r, motion=motion)
-runtime = IBPM_advance( Re, boundary, freestream, Δx=Δx,
-    body=body, Δt=Δt, T=10.0, plot=true )
+# motion = "static"
+# body = (type="cylinder", lengthscale=r, motion=motion)
+
+body = [ibpm.make_cylinder( r, Δx, 0.0, 0.0; motion=ibpm.Static() )] #If motion is not prescribed then Static() is assumed
+runtime = IBPM_advance( Re, boundary, body, freestream,
+    Δx=Δx, Δt=Δt, T=0.05, plot=true )
 
 # T=300.0
 # t = 0:Δt:T
