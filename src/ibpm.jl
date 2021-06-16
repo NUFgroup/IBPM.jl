@@ -47,8 +47,8 @@ function IBPM_advance(Re, boundary, body, freestream=(Ux=1.0,);
 	data = init_save_data( t, save_info, state )
 
 	#run simulation over desired time window
-    run_sim(t[1:2], state, prob) # Pre-compilation for benchmarking
-    runtime = @elapsed run_sim(t, state, prob, data=data) #advance to final time
+    # run_sim(t[1:2], state, prob) # Pre-compilation for benchmarking
+    runtime = @elapsed run_sim!(t, state, prob, data=data) #advance to final time
 
     #plotting
     if plot==true
@@ -56,7 +56,7 @@ function IBPM_advance(Re, boundary, body, freestream=(Ux=1.0,);
         plot_body(prob.model.bodies[1])
     end
 
-    return runtime
+    return runtime, data
 end
 
 """
@@ -73,9 +73,9 @@ function compute_cfl(state, prob)
 	return maximum(qwork)*Δt/Δx
 end
 
-function run_sim(t, state, prob;
+function run_sim!(t, state, prob;
 	display_freq=20,
-	data::Union{NamedTuple,Vector{Float64}}=Float64[])
+	data::Union{Array{user_var, 1},Vector{Float64}}=Float64[])
 	for i=1:length(t)
 		ibpm.advance!(state, prob, t[i])
 		if ~all(isfinite.(state.CL))

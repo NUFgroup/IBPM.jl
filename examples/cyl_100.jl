@@ -27,8 +27,11 @@ svfc = [ (t,state)->state.CL; (t,state)->state.Γ  ] #vector of functions that
                                                     #specify which data to save
 svti = [ [Float64[]]; 0.01 ] #corresponding vector of save instances (1 per function)
                         #each can be prescribed as scalar Float or array
+svty = [ Float64; Array{Float64,2} ] #types of each variable
+                                                      #can be unspecified for noobs
 svna = [ :Cl, :γ ]
-save_info = (save_fcns = svfc, save_times = svti, save_names = svna)
+save_info = ( save_fcns = svfc, save_times = svti, save_names = svna,
+    save_types = svty )
 
 runtime = IBPM_advance( Re, boundary, body, freestream,
     Δx=Δx, Δt=Δt, T=0.05, plot=false, save_info=save_info )
@@ -38,10 +41,10 @@ runtime = IBPM_advance( Re, boundary, body, freestream,
 #
 # ibpm.run_sim(t[1:2], state, prob) # Pre-compile
 #
-# # Run simulation and save the animation
+# Run simulation and save the animation
 # anim = ibpm.animated_sim(t, state, prob; output=20) do state, prob
 #         ibpm.plot_state(state, prob.model.grid, clims=(-3, 3))  # Plot vorticity
 #         ibpm.plot_cyl(prob.model.bodies[1]);
 # end
-#
+
 # gif(anim, "examples/cyl_100.gif", fps=10)
