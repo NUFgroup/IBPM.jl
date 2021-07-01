@@ -1,3 +1,36 @@
+function make_body( bdy_parms::NamedTuple, Δx )
+
+    #Currently has functionality for piping into the supported bodies within
+    #sample-bodies.jl. Would be nice to add the ability for the user to be able
+    #to prescribe the body as a function of arclength...
+
+    #read user vals
+    if (:motion in keys(bdy_parms))==true
+        if bdy_parms.motion==:static
+            motion = Static()
+        end
+    else
+        motion = Static()
+    end
+
+    if (:center in keys(bdy_parms))==true
+        center = bdy_parms.center
+    else
+        center = [0.0; 0.0]
+    end
+
+    if bdy_parms.type == :cylinder
+        body = [make_cylinder( bdy_parms.lengthscale, Δx,
+            center[1], center[2]; motion=motion )]
+    end
+
+    if bdy_parms.type == :plate
+        body = [make_plate( bdy_parms.lengthscale, bdy_parms.spec.α, Δx,
+            center[1], center[2]; motion=motion )]
+    end
+    return body
+end
+
 
 function MotionType( body::V where V<:Body )
     return typeof(body.motion)

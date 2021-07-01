@@ -35,6 +35,24 @@ function IBPM_advance(Re, boundary, body, freestream=(Ux=1.0,);
         grid =  make_grid(Δx, boundary, mg=mg)
     #--
 
+    #-build body
+        #@aditya: made a template function make_body
+        #(in structure-domain/bodies.jl) that makes a body using some flags
+        #specified by the user. The function is a wrapper that calls routines
+        #within sample-bodies.jl. make_body does not support calling make_naca
+        #because
+        #    (1) that function defines the airfoil using the number of body
+        #       points as the user prescribed variable, rather than \Delta x
+        #    (2) the function doesn't allow for AoA to be specified.
+        #It would be nice to address (1) and (2) and let the user have a naca
+        #airfoil be made by specifying the type key as :naca, and perhaps adding
+        #new key, params, with subkeys spec (e.g. params.spec="0012" for a
+        #NACA0012) and \alpha.
+        #Would be nice to also modify the file to allow the user to
+        #specify the body as a function of the arc-length s.
+        body = make_body( body, Δx )
+    #--
+
 	#--Initialize problem types and models
 	    prob = IBProblem(grid, body, Δt, Re, freestream=freestream);
 	    state = IBState(prob);
@@ -56,7 +74,7 @@ function IBPM_advance(Re, boundary, body, freestream=(Ux=1.0,);
         plot_body(prob.model.bodies[1])
     end
 
-    return runtime, data
+    return prob, data, runtime
 end
 
 """
@@ -74,8 +92,8 @@ function compute_cfl(state, prob)
 end
 
 function run_sim!(t, state, prob;
-	display_freq=20,
-	data::Union{Array{user_var, 1},Vector{Float64}}=Float64[])
+	display_freq=1,
+	data::Array{user_var, 1})
 	for i=1:length(t)
 		ibpm.advance!(state, prob, t[i])
 		if ~all(isfinite.(state.CL))

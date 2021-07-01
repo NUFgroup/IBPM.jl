@@ -42,6 +42,10 @@ If n \neq 0, choose so that ds=2h.
 function make_cylinder(r, h, x0, y0; motion=Static(), n=0)
     circum = 2 * π * r; #  Circumference of the circle
 
+    if ismissing(h)==true
+        h = 2.0/Re #default to a grid Re of 2
+    end
+
     # Get # of points such that ds = 2h
     if (n==0)
         n = Int( floor( circum / h / 2 ) );
