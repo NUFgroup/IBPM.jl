@@ -98,7 +98,7 @@ function save_data!(tnow, t, prob, state, data)
 			tdiff = @. abs( data[j].t - tnow )
 			ind_diff = @. (tdiff+1.0 ≈ 1.0) #artificially add 1 to set sig figs
 			if sum(ind_diff) > 0
-				push!(data[j].val, copy(data[j].fcn( tnow, state )) )
+				push!(data[j].val, deepcopy(data[j].fcn( tnow, state )) )
 			end
 
 		  end

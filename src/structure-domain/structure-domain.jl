@@ -1,124 +1,144 @@
-function make_body( bdy_parms::NamedTuple, Δx )
+function make_body( bdy_in, Δx )
 
     #Currently has functionality for piping into the supported bodies within
     #sample-bodies.jl. Would be nice to add the ability for the user to be able
     #to prescribe the body as a function of arclength...
 
-    #read user vals
-    if (:motion in keys(bdy_parms))==true
-        if bdy_parms.motion==:static
+    #Ugly way of initializing array. Have to replace this...
+    #Not sure that the code can handle a sim with multiple Motion types...
+    if (:motion in keys(bdy_in[1]))==true
+        if bdy_in[1].motion==:static
+            bodies = RigidBody{Static}[]
+        elseif bdy_in[1].motion==:movinggrid
+            bodies = RigidBody{MovingGrid}[]
+        elseif bdy_in[1].motion==:movingbody
+            bodies = RigidBody{MotionFunction}[]
+        end
+    end
+
+
+    for bdy_j in bdy_in
+        #read user vals
+        if (:motion in keys(bdy_j))==true
+            if bdy_j.motion==:static
+                motion = Static()
+            elseif bdy_j.motion==:movinggrid
+                #back out desired grid motion
+                if (:motionfcn in keys(bdy_j))==false
+                    motion = MovingGrid(t -> 1.0, t -> 0.0, t -> 0.0, t -> 0.0,
+                        xc=0.0, yc=0.0 )
+                else
+                    mfcn = bdy_j.motionfcn
+
+                    if (:U in keys(bdy_j.motionfcn))==false
+                        Uf = (t -> 1.0)
+                    else
+                        Uf = mfcn.U
+                    end
+
+                    if (:V in keys(bdy_j.motionfcn))==false
+                        Vf = (t -> 0.0)
+                    else
+                        Vf = mfcn.V
+                    end
+
+                    if (:θ in keys(bdy_j.motionfcn))==false
+                        θf = (t -> 0.0)
+                    else
+                        θf = mfcn.θ
+                    end
+
+                    if (:θ̇ in keys(bdy_j.motionfcn))==false
+                        θ̇f = (t -> 0.0)
+                    else
+                        θ̇f = mfcn.θ̇
+                    end
+
+                    if (:xc in keys(bdy_j.motionfcn))==false
+                        xcf = 0.0
+                    else
+                        xcf = mfcn.xc
+                    end
+
+                    if (:yc in keys(bdy_j.motionfcn))==false
+                        ycf = 0.0
+                    else
+                        ycf = mfcn.yc
+                    end
+                    @show Uf, Vf, θf, θ̇f
+                    #put together:
+                    motion = MovingGrid(Uf, Vf, θf, θ̇f, xc=xcf, yc=ycf)
+                end
+            elseif bdy_j.motion==:movingbody
+                if (:motionfcn in keys(bdy_j))==false
+                    motion = MotionFunction([t -> -t, t -> 0.0, t -> 0.0],
+                        [t -> -1.0, t->0.0, t->0.0])
+                else
+                    mfcn = bdy_j.motionfcn
+
+                    if (:xc in keys(bdy_j.motionfcn))==false
+                        xcf = (t -> -t)
+                    else
+                        xcf = mfcn.xc
+                    end
+
+                    if (:yc in keys(bdy_j.motionfcn))==false
+                        ycf = (t -> 0.0)
+                    else
+                        ycf = mfcn.yc
+                    end
+
+                    if (:θ in keys(bdy_j.motionfcn))==false
+                        θcf = (t -> 0.0)
+                    else
+                        θcf = mfcn.θ
+                    end
+
+                    if (:uc in keys(bdy_j.motionfcn))==false
+                        ucf = (t -> -1.0)
+                    else
+                        ucf = mfcn.uc
+                    end
+
+                    if (:vc in keys(bdy_j.motionfcn))==false
+                        vcf = (t -> 0.0)
+                    else
+                        vcf = mfcn.vc
+                    end
+
+                    if (:θ̇ in keys(bdy_j.motionfcn))==false
+                        θ̇cf = (t -> 0.0)
+                    else
+                        θ̇cf = mfcn.θ̇
+                    end
+
+                    motion = MotionFunction([xcf, ycf, θcf],
+                        [ucf, vcf, θ̇cf])
+                end
+            end
+        else
             motion = Static()
         end
-    else
-        motion = Static()
+
+        if (:center in keys(bdy_j))==true
+            center = bdy_j.center
+        else
+            center = [0.0; 0.0]
+        end
+
+        if bdy_j.type == :cylinder
+            body = make_cylinder( bdy_j.lengthscale, Δx,
+                center[1], center[2]; motion=motion )
+        end
+
+        if bdy_j.type == :plate
+            body = make_plate( bdy_j.lengthscale, bdy_j.spec.α, Δx,
+                center[1], center[2]; motion=motion )
+        end
+
+        bodies = [bodies; body]
+        # bodies=[body]
     end
 
-    if (:center in keys(bdy_parms))==true
-        center = bdy_parms.center
-    else
-        center = [0.0; 0.0]
-    end
-
-    if bdy_parms.type == :cylinder
-        body = [make_cylinder( bdy_parms.lengthscale, Δx,
-            center[1], center[2]; motion=motion )]
-    end
-
-    if bdy_parms.type == :plate
-        body = [make_plate( bdy_parms.lengthscale, bdy_parms.spec.α, Δx,
-            center[1], center[2]; motion=motion )]
-    end
-    return body
-end
-
-
-function MotionType( body::V where V<:Body )
-    return typeof(body.motion)
-end
-
-function MotionType( bodies::Array{V, 1} where V<:Body )
-    motions = [typeof(bodies[i].motion) for i=1:length(bodies)]
-    if all(motions .== motions[1])
-        return motions[1]
-    else
-        return Motion
-    end
-end
-
-function get_body_info( bodies::Array{V, 1} where V <: Body )
-    # determine the num of body points per body
-    nf = [length(bodies[j].xb) for j=1:length(bodies)]
-    nb = [size(bodies[j].xb, 1) for j=1:length(bodies)]
-    return nb, nf
-end
-
-function get_ub(bodies::Array{V, 1} where V<:Body)
-    nb, nf = get_body_info(bodies)
-    ub = zeros(Float64, sum(nb), 2)
-
-    nbod_tally = 0; #  Used to keep a tally of which body we're on
-    for j=1:length(bodies)
-        #move_body!(bodies[j].xb, bodies[j].ub, bodies[j].motion, t)  # Not time-dependent
-        ub[nbod_tally .+ (1:nb[j]), :] .= bodies[j].ub
-
-        # update body index
-        nbod_tally += nb[j];
-    end
-    return [ub[:, 1]; ub[:, 2]]  # Stack [ub; vb]
-end
-
-
-function get_transformation(
-        motion::MotionFunction,
-        t::Float64   # Should be time of the *next* step (i.e. t[k+1])
-        )
-    x, y, θ = motion.xc(t)
-    ẋ, ẏ, θ̇ = motion.uc(t)
-
-    pos = [x, y]
-    vel = [ẋ, ẏ]
-
-    Rx = [cos(θ)  -sin(θ);  sin(θ)  cos(θ)]
-    Ru = θ̇*[-sin(θ)  -cos(θ); cos(θ)  -sin(θ)]
-
-    return TangentSE2(pos, vel, Rx, Ru)
-end
-
-
-function move_body!(body::RigidBody, t::Float64)
-    move_body!(MotionType(body), body, t)
-end
-
-function move_body!(
-    ::Type{RotatingCyl},
-    body::RigidBody,
-    t::Float64
-    )
-    """
-    Compute linear speed of points on rotating cylinder
-    θ = atan(y/x)
-    ẋ = -R*Ω*sin(θ)
-    ẏ =  R*Ω*cos(θ)
-    Note: this is a specialized case for development only
-    """
-    xb = body.xb
-    ub = body.ub
-    motion = body.motion
-    R = sqrt(xb[1, 1]^2 + xb[1, 2]^2)
-    θ = atan.(xb[:, 2], xb[:, 1])
-    ub[:, 1] .= -R*motion.Ω*sin.(θ)
-    ub[:, 2] .=  R*motion.Ω*cos.(θ)
-    return ub
-end
-
-function move_body!(
-    ::Type{MotionFunction},
-    body::RigidBody,
-    t::Float64
-    )
-    se2 = get_transformation(body.motion, t)
-    for i=1:size(body.xb, 1)
-        @views body.xb[i, :] .= se2.pos .+ se2.Rx*body.x0[i, :]
-        @views body.ub[i, :] .= se2.vel .+ se2.Ru*body.x0[i, :]
-    end
+    return bodies
 end

@@ -63,6 +63,16 @@ struct AdamsBashforth <: ExplicitScheme
 end
 
 """
+    AB2(dt::Float64)
+
+Special case: second-order Adams-Bashforth scheme.
+"""
+function AB2(dt::Float64)
+    return AdamsBashforth(dt, [1.5, -0.5])
+end
+
+
+"""
 Pre-allocate memory to certain vectors that can be re-used throughout the
 computation process
 """
@@ -112,7 +122,7 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
     function IBModel(grid::T,
                      bodies::Array{V, 1},
                      Re::Number;
-                     freestream=(Ux=1.0, Uy=0.0, inclination=0.0),
+                     freestream=(Ux=0.0, Uy=0.0, inclination=0.0),
                      xc=0.0,
                      yc=0.0) where {T <: Grid, V <: Body}
         mats = IBMatrices(grid, bodies)

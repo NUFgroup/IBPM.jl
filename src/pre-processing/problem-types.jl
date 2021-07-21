@@ -27,7 +27,7 @@ mutable struct IBProblem <: AbstractIBProblem
     Ainv
     Binv
     function IBProblem(grid::T where T <: Grid,
-                       bodies::Array{V, 1} where V <: Body,
+                       bodies::Array{<:Body, 1},
                        dt::Float64,
                        Re::Float64;
                        freestream::NamedTuple
@@ -58,6 +58,7 @@ mutable struct IBState{T<:Grid} <: State
     CL::Array{Float64, 1}    # Lift coefficient
     cfl::Float64
     slip::Float64
+    xb::Array{Array{Float64, 2}, 1}
     function IBState(prob::IBProblem)
         grid = prob.model.grid
         nb, nf = get_body_info(prob.model.bodies)
@@ -73,6 +74,11 @@ mutable struct IBState{T<:Grid} <: State
         state.CD = zeros(length(prob.model.bodies))
         state.CL = zeros(length(prob.model.bodies))
         state.cfl, state.slip = 0.0, 0.0
+
+        state.xb = [zeros(nb[i], 2) for i=1:length(nf)]
+        for j=1:length(prob.model.bodies)
+            state.xb[j] = prob.model.bodies[j].xb
+        end
         base_flux!(state, prob, 0.0)  # Initialize base flux at time zero
         return state
     end

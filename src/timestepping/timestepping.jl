@@ -3,13 +3,13 @@ using LinearAlgebra: norm  # FOR DEBUGGING
 """
     advance!(state::IBState, prob::IBProblem, t::Float64)
 
-Advance state forward in time.
+    Advance state forward in time.
 """
 function advance!(state::IBState{MultiGrid},
                   prob::IBProblem,
                   t::Float64)
     grid = prob.model.grid
-    update_bodies!(prob, t)
+    update_bodies!(state, prob, t)
 
     if MotionType(prob.model.bodies) == MovingGrid
         base_flux!(state, prob, t)
@@ -159,7 +159,7 @@ function boundary_forces!(::Type{V} where V <: Motion,
 end
 
 """
-    project_circ!(Γs, state, prob)
+project_circ!(Γs, state, prob)
 
 Update circulation to satisfy no-slip condition.
 
@@ -245,12 +245,21 @@ function base_flux!(::Type{MovingGrid},
     α = -motion.θ(t)
 
     ### Potential flow part (note θ = -α for angle of attack)
-    Ux0 = motion.U(t)*cos(α)
-    Uy0 = motion.U(t)*sin(α)
+    Ux0 = motion.U(t)*cos(α) - motion.V(t)*sin(α)
+    Uy0 = motion.U(t)*sin(α) + motion.V(t)*cos(α)
+
+    ## Add in underlying freestream components
+    Uxf = prob.model.freestream.Ux(t)
+    Uyf = prob.model.freestream.Uy(t)
+    αf = prob.model.freestream.inclination(t)
+
+    Ux0 += Uxf*cos(αf)-Uyf*sin(αf)
+    Uy0 += Uxf*sin(αf)+Uyf*cos(αf)
 
     state.q0 .*= 0.0
     for lev=1:grid.mg
-        hc = grid.h*2^(lev-1);  # Coarse grid spacing
+
+        hc = grid.h*2.0^(Float64(lev)-1.0)  # Coarse grid spacing
 
         ### x-fluxes
         @views state.q0[1:nu, lev] .= YY[:, lev]
@@ -263,6 +272,7 @@ function base_flux!(::Type{MovingGrid},
         ### Irrotational part
         @views state.q0[1:nu, lev] .+= hc*Ux0      # x-flux
         @views state.q0[(nu+1):nq, lev] .+= hc*Uy0  # y-velocity
+
     end
 end
 
@@ -303,52 +313,46 @@ function update_stress!(state::IBState,
 end
 
 """
-    AB2(dt::Float64)
-
-Initialize second-order Adams-Bashforth scheme.
-"""
-function AB2(dt::Float64)
-    return AdamsBashforth(dt, [1.5, -0.5])
-end
-
-
-"""
     update_bodies!(prob, t)
 
 Update the immersed bodies and coupling matrices (if applicable).
 """
-function update_bodies!(prob::IBProblem, t::Float64)
-    update_bodies!(MotionType(prob.model.bodies), prob, t)
+function update_bodies!(state::IBState, prob::IBProblem, t::Float64)
+    update_bodies!(MotionType(prob.model.bodies), state, prob, t)
     return nothing
 end
 
 " No motion for static or moving grid cases "
 function update_bodies!(::Union{Type{Static}, Type{MovingGrid}},
+                        state::IBState,
                         prob::IBProblem,
                         t::Float64)
     return nothing
 end
 
-" For a rotating cylinder, update the velocity, but not the operators "
-function update_bodies!(::Type{RotatingCyl}, prob::IBProblem, t::Float64)
-    model = prob.model
-    bodies, grid = prob.model.bodies, prob.model.grid
-    for j=1:length(bodies)
-        move_body!(bodies[j], t)
-    end
-    return nothing
-end
+#DEPRECATED because of MotionFunction?
+# " For a rotating cylinder, update the velocity, but not the operators "
+# function update_bodies!(::Type{RotatingCyl}, prob::IBProblem, t::Float64)
+#     model = prob.model
+#     bodies, grid = prob.model.bodies, prob.model.grid
+#     for j=1:length(bodies)
+#         move_body!(bodies[j], t)
+#     end
+#     return nothing
+# end
 
 " For moving grid, update the bodies and the coupling operators"
-function update_bodies!(::Type{MotionFunction}, prob::IBProblem, t::Float64)
+function update_bodies!(::Type{MotionFunction}, state::IBState, prob::IBProblem, t::Float64)
     model = prob.model
     bodies, grid = prob.model.bodies, prob.model.grid
     for j=1:length(bodies)
         move_body!(bodies[j], t)
+        state.xb[j] = bodies[j].xb
     end
 
     # For arbitrary motion in a fixed frame, have to update operators
     model.mats.E = setup_reg( grid, bodies )
     prob.Binv = get_Binv(model, prob.Ainv[1])
+
     return nothing
 end

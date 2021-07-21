@@ -6,6 +6,7 @@ using FFTW
 using LinearMaps
 using IterativeSolvers
 using InplaceOps  # @! macro
+using Plots
 
 export IBPM_advance
 
@@ -24,8 +25,8 @@ Convenience function to solve the full problem and plot final solution
 
 For more control, just use this as a template - see benchmarks and examples
 """
-function IBPM_advance(Re, boundary, body, freestream=(Ux=1.0,);
-    Δx=missing, mg=5, Δt=missing, T=20.0*dt, plot=false, save_info=missing)
+function IBPM_advance(Re, boundary, body, freestream=(Ux=t->0.0,);
+    Δx=missing, mg=5, Δt=missing, T=20.0*dt, save_info=missing)
 
     #--extract user params to sim variables
         Δx, Δt, T, freestream = read_user_vars(Δt, Δx, freestream, Re, T)
@@ -68,12 +69,6 @@ function IBPM_advance(Re, boundary, body, freestream=(Ux=1.0,);
     # run_sim(t[1:2], state, prob) # Pre-compilation for benchmarking
     runtime = @elapsed run_sim!(t, state, prob, data=data) #advance to final time
 
-    #plotting
-    if plot==true
-        plot_state(state, prob.model.grid)
-        plot_body(prob.model.bodies[1])
-    end
-
     return prob, data, runtime
 end
 
@@ -92,7 +87,7 @@ function compute_cfl(state, prob)
 end
 
 function run_sim!(t, state, prob;
-	display_freq=1,
+	display_freq=25,
 	data::Array{user_var, 1})
 	for i=1:length(t)
 		ibpm.advance!(state, prob, t[i])
@@ -108,23 +103,5 @@ function run_sim!(t, state, prob;
 	    save_data!( t[i], t, prob, state, data  )
 	end
 end
-
-function animated_sim(update_plot, t, state, prob;
-		nplt=100,
-		output=1,
-		callback=(state, prob)->nothing)
-    n_iter = length(t)÷nplt
-    anim = @animate for i=1:n_iter
-		sim_idx = (i-1)*nplt.+(1:nplt)
-		run_sim( @view(t[sim_idx]), state, prob; output=output, callback=callback )
-		if ~all(isfinite.(state.CL))
-			break
-		end
-		update_plot(state, prob)
-    end
-	return anim
-end
-
-
 
 end

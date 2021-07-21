@@ -17,34 +17,19 @@ function read_user_vars(Δt::Union{Missing,Float64},
         if xkey==false
             Ux = t->t^0.0
         else
-            if (typeof(freestream.Ux)==Float64 ||
-                typeof(freestream.Ux)==Int64) == true #convert to function if constant
-                Ux = t->freestream.Ux*t^0.0
-            else
-                Ux = freestream.Ux
-            end
+            Ux = freestream.Ux
         end
 
         if ykey==false
             Uy=t->0.0*t^0.0
         else
-            if (typeof(freestream.Uy)==Float64 ||
-                typeof(freestream.Uy)==Int64) == true #convert to function if constant
-                Uy = t->freestream.Uy*t^0.0
-            else
-                Uy = freestream.Uy
-            end
+            Uy = freestream.Uy
         end
 
         if anglekey==false
             inclination=t->0.0*t^0.0
         else
-            if (typeof(freestream.inclination)==Float64 ||
-                typeof(freestream.inclination)==Int64) == true
-                inclination = t->freestream.inclination*t^0.0
-            else
-                inclination = freestream.inclination
-            end
+            inclination = freestream.inclination
         end
 
         tnames = (:Ux, :Uy, :inclination)

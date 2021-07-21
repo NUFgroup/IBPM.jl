@@ -1,51 +1,117 @@
 include("../src/ibpm.jl")
 using .ibpm
 
-"""
-Any[5.0, [2.43850303680305, 2.4758858950482403], [1.8523198640158964, -1.9568651471240626], 0.14081634953573285]
-"""
 
-# Define grid
-nx = 300  # num of x points on finest domain
-ny = 400  # num of y points on finest domain (length in y-dirn is len/m * n )
-mg = 3   # num domains
+using FileIO #For saving data as a jld2 file
 
-offx = 0.8; # offset in x dirn (on fine domain, x-grid runs from -offx to len-offx.
-offy = 2.1; # offset in y dirn (same as offx but in y-dirn)
-len = 3.0  # length of domain in x-direction
+#Below, the Reynolds #, boundary of the finest domain, and body must be specified.
+#all other variables have default values and needn't be provided the user
 
-# Initialize grid
-grid = ibpm.make_grid(nx, ny, offx, offy, len, mg=mg)
+#--necessary variables
+    boundary = (-1.0453, 2.15, -2.0148, 1.992) #left, right, bottom, and top of domain
+    Re = 200.0 #Reynolds #
 
-# Other parameters
-Re = 200.0
-Δt = 1e-3
+    # specify bodies as a vector of named tuples with keys type, lengthscale,
+    #center, motion.
+    #Type and lengthscale must be specified. The others have defaults associated
+    #with a stationary body centered at (x,y)=(0.0,0.0)
 
-# Initialize motion
-Uinf = 1.0;   # Free-stream flow
-α = 0.0 * π/180.0;      # Angle of attack
+    #In this case, create 2 cylinders with radius 0.5 and spacing 0.1
+    type = :cylinder #:cylinder, :plate are supported
+    r = 0.5 #key lengthscale. e.g., for cylinder is radius. Supports Float64
+    motion = :static #type of body motion. supports :static or a function of time
+                     #default is static
+    spacing = 1.0
+    center1 = [0.0; -(spacing/2.0+r)] #body CoM is centered here. default: [0.0; 0.0]
+    body1 = (type=type, lengthscale=r, motion=motion, center=center1)
+    center2 = [0.0; (spacing/2.0+r)] #body CoM is centered here. default: [0.0; 0.0]
+    body2 = (type=type, lengthscale=r, motion=motion, center=center2)
 
-# Create cylinder
-r = 0.5; # Cylinder radius
-g = 1.0; # Gap between cylinders
-# Critical point: (g0 , Re0 ) = (0.725, 56.46)
-nb = 0
-cyls = [ibpm.make_cylinder( r, grid.h, 0.0, -(g/2+r); n=nb ),
-        ibpm.make_cylinder( r, grid.h, 0.0,  (g/2+r); n=nb )]
+    bodies = [body1; body2]
+#--
 
-prob = ibpm.IBProblem(grid, cyls, Δt, Re, Uinf=Uinf);
-state = ibpm.IBState(prob);
 
-T=10.0
-t = 0:Δt:T
+#--optional variables
+    freestream = (Ux=t->t^0.0,) #freestream conditions
+                                #can be provided as constants or
+                                #functions of time
+                                #(default: (Ux=0.0, Uy=0.0, inclination=0.0))
 
-ibpm.run_sim(t[1:2], state, prob) # Pre-compile
+    T = 10.0 #final time to run to (default = 20.0*dt)
 
-# Run simulation and save the animation
-anim = ibpm.animated_sim(t, state, prob; output=10, nplt=500) do state, prob
-        ibpm.plot_state(state, prob.model.grid, clims=(-5, 5))  # Plot vorticity
-        ibpm.plot_cyl(prob.model.bodies[1]);
-        ibpm.plot_cyl(prob.model.bodies[2]);
-end
+    #simulation parameters (these are all optional)
+    Δx = 0.01 #default (==missing) gives a grid Re of 2
+    Δt = 0.002 #default (==missing) aims for a CFL of 0.1 with a
+              #fairly conservative safety factor on max vel
+    mg=5      #Number of sub-domains. Default is 5
+#--
 
-gif(anim, "examples/double_cyl.gif", fps=10)
+#--save_info (optional)
+    #gives the code information for a data structure to return
+    #user provides as a Named Tuple with three keys: save_fcns, save_times,
+    #   save_types
+    #default (if save_info is unspecified): the code returns necessary
+    #   information for a restart.
+
+    #Even if save_info is provided, only the save_fcns key is necessary.
+
+    #vector of functions that specify which data to save.
+    #default: save full state at the final time
+    #NOTE: if you want to plot the flowfield later, you have to save the full
+    #state as (t,state)-> state
+    svfc = [ (t,state)->state.CL; (t,state)->state  ]
+
+    #corresponding vector of save instances (1 per function)
+    #each can be prescribed as scalar Float or array.
+    #default: save at the final time instance T for each save variable
+    #if any of the entries is either 0.0 or missing, that variable will be saved
+    #every timestep
+    svti = [ 0.0, T/30.0 ]
+    #types of each variable
+    #default: Any for each save variable
+    svty = [ Vector{Float64}; Any ]
+
+    #Store in Named Tuple
+    save_info = ( save_fcns = svfc, save_types = svty, save_times = svti )
+
+#--
+
+#--run the simulation based on user data
+    prob, data, runtime = IBPM_advance( Re, boundary, bodies, freestream,
+        Δx=Δx, Δt=Δt, T=T, save_info=save_info )
+
+        #Uncomment to save data as a JLD2 file (caution, could be large!)
+        # FileIO.save("examples/output.jld2",  "data", data, "prob", prob)
+#--
+
+
+#--after running, you can use the data struct to plot/analyze quantities.
+    using Plots
+
+    #Looking at timetraces of lift or drag is a good starting point. Lift was
+    #the first variable saved in our data struct so we can plot that as...
+
+        #1st body
+        plot( data[1].t, [data[1].val[j][1] for j in 1:length(data[1].t)],
+        legend=:false )
+
+        #2nd body
+        display( plot!( data[1].t, [data[1].val[j][2] for j in 1:length(data[1].t)],
+        legend=:false ) )
+
+    #Plotting the flowfield is trickier, so there's more built-in support for
+    #that. First off, we can plot a snapshot of the flowfield in terms of either
+    #vorticity (var=:omega, default), x and y velocity (var=:vel), or the
+    #streamfunction (var=:psi). Let's do that at the final time:
+    ibpm.plot_state( prob, data[2].val[end], data[2].t[end], var=:omega,
+        xlims=(-4.0, 10.0), ylims=(-3.0, 3.0), clims=(-5.0, 5.0), clevs=40)
+
+    #We can also use Julia's handy @animate macro to make a gif of the vorticity
+    # field from our save data:
+    anim = @animate for j = 1 : length(data[2].t)
+                ibpm.plot_state( prob, data[2].val[j], data[2].t[j], var=:omega,
+                xlims=(-4.0, 10.0), ylims=(-3.0, 3.0), clims=(-5.0, 5.0), clevs=40 )
+            end
+    #To save the animation, use gif():
+    gif(anim, "examples/double_cyls.gif", fps=10)
+#--
