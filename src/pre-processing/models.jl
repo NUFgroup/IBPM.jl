@@ -63,6 +63,16 @@ struct AdamsBashforth <: ExplicitScheme
 end
 
 """
+    AB2(dt::Float64)
+
+Special case: second-order Adams-Bashforth scheme.
+"""
+function AB2(dt::Float64)
+    return AdamsBashforth(dt, [1.5, -0.5])
+end
+
+
+"""
 Pre-allocate memory to certain vectors that can be re-used throughout the
 computation process
 """
@@ -104,8 +114,7 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
     grid::T
     bodies::Array{V, 1}         # Array of bodies
     Re::Float64                 # Reynolds number
-    Uinf::Float64               # Free-stream velocity
-    α::Float64                  # Angle of attack
+    freestream::NamedTuple      # Free-stream velocity
     mats::IBMatrices            # Various precomputed sparse matrices
     work::WorkingMemory
     XX::Union{Array{Float64, 2}, Nothing}  #  x-locations for computing rotational fluxes
@@ -113,8 +122,7 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
     function IBModel(grid::T,
                      bodies::Array{V, 1},
                      Re::Number;
-                     Uinf=1.0,
-                     α=0.0,
+                     freestream=(Ux=0.0, Uy=0.0, inclination=0.0),
                      xc=0.0,
                      yc=0.0) where {T <: Grid, V <: Body}
         mats = IBMatrices(grid, bodies)
@@ -144,6 +152,6 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
         else
             XX, YY = nothing, nothing
         end
-        return new{T, V}(grid, bodies, Float64(Re), Uinf, α, mats, work, XX, YY)
+        return new{T, V}(grid, bodies, Float64(Re), freestream, mats, work, XX, YY)
     end
 end

@@ -6,36 +6,50 @@ using FileIO #For saving data as a jld2 file
 #all other variables have default values and needn't be provided the user
 
 #--necessary variables
-    boundary = (-1.0453, 3.15, -2.0148, 2.212) #left, right, bottom, and top of domain
-    Re = 100.0 #Reynolds #
+    boundary = (-4.0, 4.023, -2.0148, 1.99) #left, right, bottom, and top of domain
+    Re = 200.0 #Reynolds #
     # specify body as a vector of named tuples with keys type, lengthscale,
     #center, motion.
     #Type and lengthscale must be specified. The others have defaults associated
     #with a stationary body centered at (x,y)=(0.0,0.0)
-    type = :cylinder #:cylinder, :plate are supported
-    lengthscale = 0.5 #key lengthscale. e.g., for cylinder is radius. Supports Float64
-    motion = :static #type of body motion. supports :static or a function of time
-                     #default is static
-    center = [0.0; 0.74] #body CoM is centered here. default: [0.0; 0.0]
-                         #displace in y to trigger asymmetry
-    body = [(type=type, lengthscale=lengthscale, motion=motion, center=center)]
+    type = :plate #:cylinder, :plate are supported
+    lengthscale = 1.0 #key lengthscale. e.g., for cylinder is radius. Supports Float64
+    motion = :movingbody #type of body motion. supports
+                     #:static (default)
+                     #:movinggrid
+                     #:movingbody
+        #NOTE: if not :static, prescribed motion is given as a function of time
+        #For :movingbody, precribe as named tuple with keys xc (x pos of CoM),
+        #yc (y posn of CoM), \theta (rotational motion),
+        #and uc, vc, and \dot{\theta} (time derivatives of above terms)
+        #DEFAULT: (xc=(t -> -t), yc=(t->t->0.0), \theta=(t->0.0),
+        #\dot{\theta}=(t->0.0), xc=0.0, yc=0.0  )
+    mfcn = (xc=t->-cos(t), yc=t->0.0, θ=t->0.0,
+        uc=t->sin(t), vc=t->0.0, θ̇=t->0.0)
+
+    center = [0.0; 0.5] #body CoM is centered here. default: [0.0; 0.0]
+                        #displace in y to trigger asymmetry
+    spec = (α = 90.0*π/180.0,) #:plate type supports AoA within spec variable
+    body = [(type=type, lengthscale=lengthscale, motion=motion,
+        motionfcn=mfcn, spec=spec, center=center)]
 #--
 
 #--optional variables
-    freestream = (Ux=t->t^0.0,) #freestream conditions
+    freestream = (Ux=t->0.0,) #freestream conditions
                                 #can be provided as constants or
                                 #functions of time
-                                #(default: (Ux=0.0, Uy=0.0, inclination=0.0))
+                                #(default: (Ux=t->0.0,
+                                #           Uy=t->0.0,
+                                #           inclination=t->0.0))
 
-    T = 10.0 #final time to run to (default = 20.0*dt)
+    T = 1.0π #final time to run to (default = 20.0*dt)
 
     #simulation parameters (these are all optional)
     Δx = 0.02 #default (==missing) gives a grid Re of 2
-    Δt = 0.004 #default (==missing) aims for a CFL of 0.1 with a
+    Δt = 0.002 #default (==missing) aims for a CFL of 0.1 with a
               #fairly conservative safety factor on max vel
-    mg=5      #Number of sub-domains. Default is 5
+    mg=3      #Number of sub-domains. Default is 5
 #--
-
 #--save_info (optional)
     #gives the code information for a data structure to return
     #user provides as a Named Tuple with three keys: save_fcns, save_times,
@@ -96,8 +110,8 @@ using FileIO #For saving data as a jld2 file
     # field from our save data:
     anim = @animate for j = 1 : length(data[2].t)
                 ibpm.plot_state( prob, data[2].val[j], data[2].t[j], var=:omega,
-                xlims=(-4.0, 10.0), ylims=(-3.0, 3.0), clims=(-5.0, 5.0), clevs=40 )
+                xlims=(-4.0, 4.0), ylims=(-2.0, 2.0), clims=(-5.0, 5.0), clevs=40 )
             end
     #To save the animation, use gif():
-    gif(anim, "examples/cyl_100.gif", fps=10)
+    gif(anim, "examples/osc_plate_movingbody.gif", fps=10)
 #--

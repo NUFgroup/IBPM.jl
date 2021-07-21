@@ -27,13 +27,13 @@ mutable struct IBProblem <: AbstractIBProblem
     Ainv
     Binv
     function IBProblem(grid::T where T <: Grid,
-                       bodies::Array{V, 1} where V <: Body,
+                       bodies::Array{<:Body, 1},
                        dt::Float64,
                        Re::Float64;
-                       Uinf::Float64=1.0,
-                       α::Float64=0.0)
+                       freestream::NamedTuple
+                       )
         prob = new()
-        prob.model = IBModel(grid, bodies, Re; Uinf=Uinf, α=α)
+        prob.model = IBModel(grid, bodies, Re; freestream=freestream)
         prob.scheme = AB2(dt)   # Explicit time-stepping for nonlinear terms
         prob.A, prob.Ainv, prob.Binv = get_AB(prob.model, dt)
         return prob
@@ -58,6 +58,7 @@ mutable struct IBState{T<:Grid} <: State
     CL::Array{Float64, 1}    # Lift coefficient
     cfl::Float64
     slip::Float64
+    xb::Array{Array{Float64, 2}, 1}
     function IBState(prob::IBProblem)
         grid = prob.model.grid
         nb, nf = get_body_info(prob.model.bodies)
@@ -73,75 +74,12 @@ mutable struct IBState{T<:Grid} <: State
         state.CD = zeros(length(prob.model.bodies))
         state.CL = zeros(length(prob.model.bodies))
         state.cfl, state.slip = 0.0, 0.0
+
+        state.xb = [zeros(nb[i], 2) for i=1:length(nf)]
+        for j=1:length(prob.model.bodies)
+            state.xb[j] = prob.model.bodies[j].xb
+        end
         base_flux!(state, prob, 0.0)  # Initialize base flux at time zero
         return state
-    end
-end
-
-
-"""
-    base_flux!(state::IBState, prob::IBProblem, t::Float64)
-Set background flux based on `prob.model.bodies[].motion`
-Assumes same free-stream parameters for all motions (<-- CHANGE THIS)
-"""
-function base_flux!(state::IBState,
-                    prob::IBProblem,
-                    t::Float64)
-    base_flux!(MotionType(prob.model.bodies), state, prob, t)
-end
-
-"Initialize irrotational freestream flux when not time-varying"
-function base_flux!(::Type{T} where T <: InertialMotion,
-                    state::IBState{MultiGrid},
-                    prob::IBProblem,
-                    t::Float64)
-    grid = prob.model.grid
-    Uinf, α = prob.model.Uinf, prob.model.α
-    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
-    for lev = 1 : grid.mg
-        # Coarse grid spacing
-        hc = grid.h * 2^( lev - 1 );
-
-        # write fluid velocity flux in body-fixed frame
-        state.q0[ 1:nu, lev ] .= Uinf * hc * cos(α);      # x-flux
-        state.q0[ nu+1:end, lev ] .= Uinf * hc * sin(α);  # y-flux
-    end
-end
-
-"Update time-varying background flux for moving grid"
-function base_flux!(::Type{MovingGrid},
-                    state::IBState{MultiGrid},
-                    prob::IBProblem,
-                    t::Float64)
-    @assert length(prob.model.bodies) == 1 # Assumes only one body
-    grid = prob.model.grid
-    motion = prob.model.bodies[1].motion
-    XX, YY = prob.model.XX, prob.model.YY;
-    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
-    nq = grid.nq
-
-    ### Rotational part
-    Ω = -motion.θ̇(t)
-    α = -motion.θ(t)
-
-    ### Potential flow part (note θ = -α for angle of attack)
-    Ux0 = motion.U(t)*cos(α)
-    Uy0 = motion.U(t)*sin(α)
-
-    state.q0 .*= 0.0
-    for lev=1:grid.mg
-        hc = grid.h*2^(lev-1);  # Coarse grid spacing
-
-        ### x-fluxes
-        @views state.q0[1:nu, lev] .= YY[:, lev]
-        @views state.q0[1:nu, lev] .*= -hc*Ω
-
-        ### y-fluxes
-        @views state.q0[(nu+1):nq, lev] .= XX[:, lev]
-        @views state.q0[(nu+1):nq, lev] .*= hc*Ω
-
-        ### Irrotational part
-        @views state.q0[1:nu, lev] .+= hc*Ux0      # x-flux
-        @views state.q0[(nu+1):nq, lev] .+= hc*Uy0  # y-velocity
     end
 end
