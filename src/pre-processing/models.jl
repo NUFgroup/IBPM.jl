@@ -96,6 +96,7 @@ mutable struct WorkingMemory
         work.q3 = zeros(grid.nq) # nonlinear
         work.q4 = zeros(grid.nq) # nonlinear
         work.q5 = zeros(grid.nq) # nonlinear
+        work.q6 = zeros(grid.nq) # Used for linear stability analysis
         work.Γ3 = zeros(grid.nΓ) # vort2flux
         work.Γbc = zeros(2*(grid.nx+1)+2*(grid.ny+1))
         work.rhsbc = zeros(grid.nΓ)

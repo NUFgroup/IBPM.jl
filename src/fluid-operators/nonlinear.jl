@@ -20,7 +20,7 @@ function avg_flux(state, prob; lev=1)
 
    # Get reshaped 2D views into flux
    qx, qy = grid.split_flux(state.q; lev=lev);
-   q0x, q0y = grid.split_flux(state.q0; lev=lev);  # Base flux
+   q0x, q0y = grid.split_flux(state.q0; lev=lev);  # Base flux from background flow (0 in stability analysis)
 
    # Same for working memory
    Q = prob.model.work.q2;  Q.*=0.0;
@@ -34,8 +34,96 @@ function avg_flux(state, prob; lev=1)
    i=2:nx; j=1:ny+1
    @views broadcast!(+, Qy[i,j], qy[i,j], q0y[i,j], qy[i.-1,j], q0y[i.-1,j] )
 
-   return Qx, Qy
+   return Q
 end
+
+"""
+   direct_product_loops!(fq, )
+"""
+function direct_product_loops!(fq, Q, Γ, Γbc, grid, fq_tmp1, fq_tmp2)
+   nx, ny = grid.nx, grid.ny
+   T, B, L, R = grid.TOP, grid.BOT, grid.LEFT, grid.RIGHT  # Constant offsets for indexing BCs
+
+   Qx, Qy = grid.split_flux(Q)   # These are views into Q (though won't be changed here)
+   fqx, fqy = grid.split_flux(fq);  # Views into fq - changing them will change fq
+   
+   #-- Alias working memory
+      fq_tmp1.*=0.0;
+      fq1x, fq1y = grid.split_flux(fq_tmp1);  # Views of fq1 (which is not itself needed anywhere)
+
+      fq_tmp2.*=0.0;
+      fq2x, fq2y = grid.split_flux(fq_tmp2);  # Views of fq2
+   #--
+
+   #-- Product of flux and circulation
+      ### x-fluxes
+      i=2:nx; j=2:ny-1
+      @views nl_avg!(fqx[i,j], Qy[i,j.+1], Γ[i.-1,j],
+            Qy[i,j], Γ[i.-1,j.-1], fq1x[i,j], fq2x[i,j])
+      j=1;  # Bottom boundary
+      @views nl_avg!(fqx[i,j], Qy[i,j.+1], Γ[i.-1,j],
+            Qy[i,j], Γbc[B.+i], fq1x[i,j], fq2x[i,j])
+      j=ny;  # Top boundary
+      @views nl_avg!(fqx[i,j], Qy[i,j], Γ[i.-1,j.-1],
+            Qy[i,j.+1], Γbc[T.+i], fq1x[i,j], fq2x[i,j])
+
+      ### y-fluxes
+      i=2:nx-1; j=2:ny
+      @views nl_avg!(fqy[i,j], Qx[i.+1,j], Γ[i,j.-1],
+            Qx[i,j], Γ[i.-1,j.-1], fq1y[i,j], fq2y[i,j]; scale=-1.0)
+      i=1;  # Left boundary
+      @views nl_avg!(fqy[i,j], Qx[i.+1,j], Γ[i,j.-1],
+            Qx[i,j],  Γbc[L.+j], fq1y[i,j], fq2y[i,j]; scale=-1.0)
+      i=nx;
+      @views nl_avg!(fqy[i,j], Qx[i,j], Γ[i.-1,j.-1],
+            Qx[i.+1,j],  Γbc[R.+j], fq1y[i,j], fq2y[i,j]; scale=-1.0)
+   #--
+
+end
+
+"""
+   direct_product!(fq, Q, Γ, prob::IBProblem)
+
+Compute the direct product of Q and Γ for nonlinear term.
+
+Needs three flux-shaped matrices from working memory
+"""
+function direct_product!(fq, Q, Γ, Γbc, prob::IBProblem)
+   grid = prob.model.grid; work = prob.model.work
+
+   # fq is the output array: the product of flux and circulation such that the nonlinear
+   #   term is C'*fq (or ∇⋅fq)
+   fq.*=0.0;  # Zero out in case some locations aren't indexed
+
+   # Call helper function to loop over the arrays and store product in fq
+   direct_product_loops!(fq, Q, Γ, Γbc, grid, work.q4, work.q5)
+
+   return nothing
+end
+
+"""
+   direct_product!(fq, Q, Γ, prob::LinearizedIBProblem)
+
+Compute the base flow advection terms for the linear problem.
+
+Needs FOUR flux-shaped arrays from working memory (one extra compared to nonlinear solver)
+"""
+function direct_product!(fq, Q, Γ, Γbc, prob::LinearizedIBProblem)
+   grid = prob.model.grid; work = prob.model.work
+
+   # fq is the output array: the product of flux and circulation such that the nonlinear
+   #   term is C'*fq (or ∇⋅fq)
+   fq.*=0.0;  # Zero out in case some locations aren't indexed
+   fq_tmp = work.q6; fq_tmp.*=0.0  # Extra array for second product (saves allocation)
+
+   # Call helper function to loop over the arrays and store product in fq
+   direct_product_loops!(fq, Q, ΓB, Γbc, grid, work.q4, work.q5)
+   direct_product_loops!(fq_tmp, QB, Γ, Γbc, grid, work.q4, work.q5)
+
+   fq .+= fq_tmp  # Add results
+   return nothing
+end
+
 
 """
     nonlinear!(nonlin, state, Γbc, lev, prob)
@@ -51,52 +139,96 @@ function nonlinear!( nonlin::AbstractArray,
    """
    grid = prob.model.grid;
    nx, ny = grid.nx, grid.ny
+   C = prob.model.mats.C
+
+   hc = grid.h * 2^( lev - 1);  # Coarse grid spacing
+
+   # Don't need bc's for anything after this, so we can rescale in place
+   Γbc .*= 0.25  # Account for scaling between grids
+   
+   Γ = reshape(@view(state.Γ[:, lev]), nx-1, ny-1)  # Circulation at this grid level
+   Q = avg_flux(state, prob; lev=lev)  # Compute average fluxes across cells
+
+   fq = prob.model.work.q3; # Alias working memory
+   direct_product!(fq, Q, Γ, prob)  # Product of flux and circulation
+
+   # Divergence of flux-circulation product
+   mul!( nonlin, C', fq )
+
+   # Scaling: 1/hc^2 to convert circulation to vorticity
+   #   plus factor of 4 from averaging across cells above
+   #  (applies to flux field, but this avoids a second operation)
+   nonlin .*= 1/(4*hc^2)
+
+   return nothing
+end
+
+"""
+    nonlinear!(nonlin, state, Γbc, lev, prob)
+"""
+function nonlinear_OLD!( nonlin::AbstractArray,
+                     state::IBState{MultiGrid},
+                     Γbc::AbstractArray,
+                     lev::Int,
+                     prob::IBProblem )
+   """
+   Note factor of 1/2 in boundary conditions absorbed to eliminate
+   "lastbc" from Fortran code
+   """
+   grid = prob.model.grid;
+   nx, ny = grid.nx, grid.ny
    T, B, L, R = grid.TOP, grid.BOT, grid.LEFT, grid.RIGHT  # Constant offsets for indexing BCs
    C = prob.model.mats.C
 
    hc = grid.h * 2^( lev - 1);  # Coarse grid spacing
 
-   # Alias working memory
-   #fq = @view(prob.model.work.q3[:, lev]); fq.*=0.0;
-   fq = prob.model.work.q3; fq.*=0.0;
-   fqx, fqy = grid.split_flux(fq);
-
-   #fq1 = @view(prob.model.work.q4[:, lev]); fq1.*=0.0;
-   fq1 = prob.model.work.q4; fq1.*=0.0;
-   fq1x, fq1y = grid.split_flux(fq1);
-
-   #fq2 = @view(prob.model.work.q5[:, lev]); fq2.*=0.0;
-   fq2 = prob.model.work.q5; fq2.*=0.0;
-   fq2x, fq2y = grid.split_flux(fq2);
-
-   Γ = reshape(@view(state.Γ[:, lev]), nx-1, ny-1)
-   Qx, Qy = avg_flux(state, prob; lev=lev)
-
    # Don't need bc's for anything after this, so we can rescale in place
    Γbc .*= 0.25  # Account for scaling between grids
 
-   ### x-fluxes
-   i=2:nx; j=2:ny-1
-   @views nl_avg!(fqx[i,j], Qy[i,j.+1], Γ[i.-1,j],
-         Qy[i,j], Γ[i.-1,j.-1], fq1x[i,j], fq2x[i,j])
-   j=1;  # Bottom boundary
-   @views nl_avg!(fqx[i,j], Qy[i,j.+1], Γ[i.-1,j],
-         Qy[i,j], Γbc[B.+i], fq1x[i,j], fq2x[i,j])
-   j=ny;  # Top boundary
-   @views nl_avg!(fqx[i,j], Qy[i,j], Γ[i.-1,j.-1],
-         Qy[i,j.+1], Γbc[T.+i], fq1x[i,j], fq2x[i,j])
+   #-- Alias working memory
+      fq = prob.model.work.q3; fq.*=0.0;  # Zero out in case some locations aren't indexed
+      fqx, fqy = grid.split_flux(fq);  # These are views into fq - changing them will change fq
 
-   ### y-fluxes
-   i=2:nx-1; j=2:ny
-   @views nl_avg!(fqy[i,j], Qx[i.+1,j], Γ[i,j.-1],
-         Qx[i,j], Γ[i.-1,j.-1], fq1y[i,j], fq2y[i,j]; scale=-1.0)
-   i=1;  # Left boundary
-   @views nl_avg!(fqy[i,j], Qx[i.+1,j], Γ[i,j.-1],
-         Qx[i,j],  Γbc[L.+j], fq1y[i,j], fq2y[i,j]; scale=-1.0)
-   i=nx;
-   @views nl_avg!(fqy[i,j], Qx[i,j], Γ[i.-1,j.-1],
-         Qx[i.+1,j],  Γbc[R.+j], fq1y[i,j], fq2y[i,j]; scale=-1.0)
+      fq1 = prob.model.work.q4; fq1.*=0.0;
+      fq1x, fq1y = grid.split_flux(fq1);  # Views of fq1 (which is not itself needed anywhere)
 
+      fq2 = prob.model.work.q5; fq2.*=0.0;
+      fq2x, fq2y = grid.split_flux(fq2);  # Views of fq2
+   #--
+
+   #-- Compute average fluxes across cells
+      Γ = reshape(@view(state.Γ[:, lev]), nx-1, ny-1)
+      Qx, Qy = avg_flux(state, prob; lev=lev)
+   #--
+
+   #-- Product of flux and circulation
+      # Don't need bc's for anything after this, so we can rescale in place
+      Γbc .*= 0.25  # Account for scaling between grids
+
+      ### x-fluxes
+      i=2:nx; j=2:ny-1
+      @views nl_avg!(fqx[i,j], Qy[i,j.+1], Γ[i.-1,j],
+            Qy[i,j], Γ[i.-1,j.-1], fq1x[i,j], fq2x[i,j])
+      j=1;  # Bottom boundary
+      @views nl_avg!(fqx[i,j], Qy[i,j.+1], Γ[i.-1,j],
+            Qy[i,j], Γbc[B.+i], fq1x[i,j], fq2x[i,j])
+      j=ny;  # Top boundary
+      @views nl_avg!(fqx[i,j], Qy[i,j], Γ[i.-1,j.-1],
+            Qy[i,j.+1], Γbc[T.+i], fq1x[i,j], fq2x[i,j])
+
+      ### y-fluxes
+      i=2:nx-1; j=2:ny
+      @views nl_avg!(fqy[i,j], Qx[i.+1,j], Γ[i,j.-1],
+            Qx[i,j], Γ[i.-1,j.-1], fq1y[i,j], fq2y[i,j]; scale=-1.0)
+      i=1;  # Left boundary
+      @views nl_avg!(fqy[i,j], Qx[i.+1,j], Γ[i,j.-1],
+            Qx[i,j],  Γbc[L.+j], fq1y[i,j], fq2y[i,j]; scale=-1.0)
+      i=nx;
+      @views nl_avg!(fqy[i,j], Qx[i,j], Γ[i.-1,j.-1],
+            Qx[i.+1,j],  Γbc[R.+j], fq1y[i,j], fq2y[i,j]; scale=-1.0)
+   #--
+
+   # Divergence of flux-circulation product
    mul!( nonlin, C', fq )
 
    # Scaling: 1/hc^2 to convert circulation to vorticity
