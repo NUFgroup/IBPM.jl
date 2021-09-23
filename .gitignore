@@ -1,6 +1,12 @@
-
+.gitignore
 .DS_Store
 
 *.jld2
 
 *.png
+clear_mem.sh
+notes.txt
+./*.gif
+local/
+docs/
+*.bson
