@@ -30,7 +30,7 @@ mutable struct IBProblem <: AbstractIBProblem
                        bodies::Array{<:Body, 1},
                        dt::Float64,
                        Re::Float64;
-                       freestream::NamedTuple
+                       freestream::NamedTuple=(Ux=t->0.0,Uy=t->0.0,inclination=t->0.0*t^0.0)
                        )
         prob = new()
         prob.model = IBModel(grid, bodies, Re; freestream=freestream)
