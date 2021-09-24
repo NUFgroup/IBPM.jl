@@ -19,3 +19,13 @@ cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0 )]
 
  #freestream conditions
 freestream = (Ux=t->1.0, Uy=t->0.0, inclination=t->0.0)
+
+function run_sim(t, state, prob; output=1, callback=(state, prob)->nothing)
+	for i=1:length(t)
+		ibpm.advance!(state, prob, t[i])
+        if mod(i,output) == 0
+			callback(state, prob);  # Primitive callback, can be used for plotting or other output
+            @show (t[i], state.CD, state.CL, state.cfl)
+        end
+	end
+end

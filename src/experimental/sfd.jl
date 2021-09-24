@@ -49,7 +49,7 @@ function init_sfd(prob::IBProblem,
 end
 
 function advance!(t::Float64,
-                  state::IBState{MultiGrid},
+                  state::IBState,
                   sfd::SFDProblem)
     """
     Wrapper around the main time-stepper

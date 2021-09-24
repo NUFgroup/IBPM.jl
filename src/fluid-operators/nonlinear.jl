@@ -65,9 +65,14 @@ function avg_flux(state::IBState, prob::LinearizedIBProblem; lev=1)
 end
 
 """
-   direct_product_loops!(fq, )
+   direct_product_loops!(fq, Q, Γ, Γbc, prob)
+
+Helper function to compute the product of Q and Γ so that the advective
+   term is ∇⋅fq
 """
-function direct_product_loops!(fq, Q, Γ, Γbc, grid, fq_tmp1, fq_tmp2)
+function direct_product_loops!(fq, Q, Γ, Γbc, prob::AbstractIBProblem)
+   grid, work = prob.model.grid, prob.model.work
+   fq_tmp1, fq_tmp2 = work.q5, work.q6
    nx, ny = grid.nx, grid.ny
    T, B, L, R = grid.TOP, grid.BOT, grid.LEFT, grid.RIGHT  # Constant offsets for indexing BCs
 
@@ -109,13 +114,14 @@ function direct_product_loops!(fq, Q, Γ, Γbc, grid, fq_tmp1, fq_tmp2)
 end
 
 """
-   direct_product!(fq, Q, Γ, prob::IBProblem)
+   direct_product!(fq, Q, Γ, prob::IBProblem, lev)
 
-Compute the direct product of Q and Γ for nonlinear term.
+Gather the product used in computing advection term
 
-Needs three flux-shaped matrices from working memory
+Note that the grid level `lev` isn't used here, but is required for
+   the linearized version
 """
-function direct_product!(fq, Q, Γ, Γbc, prob::IBProblem)
+function direct_product!(fq, Q, Γ, Γbc, lev, prob::IBProblem)
    grid = prob.model.grid; work = prob.model.work
 
    # fq is the output array: the product of flux and circulation such that the nonlinear
@@ -123,51 +129,55 @@ function direct_product!(fq, Q, Γ, Γbc, prob::IBProblem)
    fq.*=0.0;  # Zero out in case some locations aren't indexed
 
    # Call helper function to loop over the arrays and store product in fq
-   direct_product_loops!(fq, Q, Γ, Γbc, grid, work.q4, work.q5)
+   direct_product_loops!(fq, Q, Γ, Γbc, prob)
 
    return nothing
 end
 
 """
-   direct_product!(fq, Q, Γ, prob::LinearizedIBProblem)
+   direct_product!(fq, Q, Γ, prob::LinearizedIBProblem, lev)
 
 Compute the base flow advection terms for the linear problem.
 
 Needs FOUR flux-shaped arrays from working memory (one extra compared to nonlinear solver)
 """
-function direct_product!(fq, Q, Γ, Γbc, prob::LinearizedIBProblem)
+function direct_product!(fq, Q, Γ, Γbc, lev, prob::LinearizedIBProblem)
    grid = prob.model.grid; work = prob.model.work
 
    # fq is the output array: the product of flux and circulation such that the nonlinear
    #   term is C'*fq (or ∇⋅fq)
    fq.*=0.0;  # Zero out in case some locations aren't indexed
-   fq_tmp = work.q6; fq_tmp.*=0.0  # Extra array for second product (saves allocation)
+   fq_tmp = work.q4; fq_tmp.*=0.0  # Extra array for second product (saves allocation)
+
+   # Base circulation, flux
+   ΓB = reshape(@view(prob.ΓB[:, lev]), grid.nx-1, grid.ny-1)
+   QB = @view(prob.QB[:, lev])
 
    # Call helper function to loop over the arrays and store product in fq
-   direct_product_loops!(fq, Q, ΓB, Γbc, grid, work.q4, work.q5)
-   direct_product_loops!(fq_tmp, QB, Γ, Γbc, grid, work.q4, work.q5)
+   direct_product_loops!(fq, Q, ΓB, Γbc, prob)
+   direct_product_loops!(fq_tmp, QB, Γ, Γbc, prob)
 
-   fq .+= fq_tmp  # Add results
+   # Nonlinear term in ∇⋅(Q⊗ΓB + QB⊗Γ)
+   fq .+= fq_tmp
    return nothing
 end
 
 """
-    nonlinear!(nonlin, state, Γbc, lev, prob)
+    nonlinear!(nonlin, state, Γbc, lev, prob::IBProblem)
 """
 function nonlinear!( nonlin::AbstractArray,
-                     state::IBState{MultiGrid},
+                     state::IBState,
                      Γbc::AbstractArray,
                      lev::Int,
                      prob::AbstractIBProblem )
-   """
-   Note factor of 1/2 in boundary conditions absorbed to eliminate
-   "lastbc" from Fortran code
-   """
-   grid = prob.model.grid;
+   grid, work = prob.model.grid, prob.model.work;
    nx, ny = grid.nx, grid.ny
    C = prob.model.mats.C
 
-   hc = grid.h * 2^( lev - 1);  # Coarse grid spacing
+   # fq is the output array: the product of flux and circulation such that the nonlinear
+   #   term is C'*fq (or ∇⋅fq)
+   fq = work.q3 # Alias working memory
+   fq.*=0.0  # Zero out in case some locations aren't indexed
 
    # Don't need bc's for anything after this, so we can rescale in place
    Γbc .*= 0.25  # Account for scaling between grids
@@ -175,8 +185,8 @@ function nonlinear!( nonlin::AbstractArray,
    Γ = reshape(@view(state.Γ[:, lev]), nx-1, ny-1)  # Circulation at this grid level
    Q = avg_flux(state, prob; lev=lev)  # Compute average fluxes across cells
 
-   fq = prob.model.work.q3; # Alias working memory
-   direct_product!(fq, Q, Γ, Γbc, prob)  # Product of flux and circulation
+   # Call helper function to loop over the arrays and store product in fq
+   direct_product!(fq, Q, Γ, Γbc, lev, prob)
 
    # Divergence of flux-circulation product
    mul!( nonlin, C', fq )
@@ -184,6 +194,7 @@ function nonlinear!( nonlin::AbstractArray,
    # Scaling: 1/hc^2 to convert circulation to vorticity
    #   plus factor of 4 from averaging across cells above
    #  (applies to flux field, but this avoids a second operation)
+   hc = grid.h * 2^( lev - 1);  # Coarse grid spacing
    nonlin .*= 1/(4*hc^2)
 
    return nothing
@@ -193,7 +204,7 @@ end
     nonlinear!(nonlin, state, Γbc, lev, prob)
 """
 function nonlinear_OLD!( nonlin::AbstractArray,
-                     state::IBState{MultiGrid},
+                     state::IBState,
                      Γbc::AbstractArray,
                      lev::Int,
                      prob::IBProblem )
@@ -224,7 +235,8 @@ function nonlinear_OLD!( nonlin::AbstractArray,
 
    #-- Compute average fluxes across cells
       Γ = reshape(@view(state.Γ[:, lev]), nx-1, ny-1)
-      Qx, Qy = avg_flux(state, prob; lev=lev)
+      Q = avg_flux(state, prob; lev=lev)
+      Qx, Qy = grid.split_flux(Q)
    #--
 
    #-- Product of flux and circulation

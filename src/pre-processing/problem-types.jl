@@ -41,56 +41,6 @@ mutable struct IBProblem <: AbstractIBProblem
 end
 
 """
-State variables (stores everything needed for time stepping)
-"""
-abstract type State end
-
-mutable struct IBState{T<:Grid} <: State
-    q::Array{Float64, 2}
-    q0::Array{Float64, 2}
-    Γ::Array{Float64, 2}     # Circulation
-    ψ::Array{Float64, 2}     # Streamfunction
-    nonlin::Array{Array{Float64, 2}, 1}  # Memory of nonlinear terms
-    fb::Array{Array{Float64, 2}, 1}          # Surface stresses
-    F̃b::Array{Float64, 2}                    # Body forces * dt
-    CD::Array{Float64, 1}    # Drag coefficient
-    CL::Array{Float64, 1}    # Lift coefficient
-    cfl::Float64
-    slip::Float64
-    xb::Array{Array{Float64, 2}, 1}
-    function IBState(prob::AbstractIBProblem)
-        grid = prob.model.grid
-        nb, nf = get_body_info(prob.model.bodies)
-
-        state = new{typeof(grid)}()
-        state.q  = zeros(grid.nq, grid.mg)    # Flux
-        state.q0 = zeros(grid.nq, grid.mg)    # Background flux
-        state.Γ  = zeros(grid.nΓ, grid.mg)    # Circulation
-        state.ψ  = zeros(grid.nΓ, grid.mg)    # Streamfunction
-        state.nonlin = [zeros(grid.nΓ, grid.mg) for i=1:length(prob.scheme.β)]
-        state.fb = [zeros(nb[i], 2) for i=1:length(nf)]
-        state.F̃b = zeros(sum(nf), 1)
-        state.CD = zeros(length(prob.model.bodies))
-        state.CL = zeros(length(prob.model.bodies))
-        state.cfl, state.slip = 0.0, 0.0
-
-        state.xb = [zeros(nb[i], 2) for i=1:length(nf)]
-        for j=1:length(prob.model.bodies)
-            state.xb[j] = prob.model.bodies[j].xb
-        end
-        base_flux!(state, prob, 0.0)  # Initialize base flux at time zero
-        return state
-    end
-end
-
-"Randomly initialize the vorticity of the IBState"
-function IBState(prob::AbstractIBProblem, noise_level::Float64)
-    state = IBState(prob)
-    state.Γ = noise_level*randn(size(state.Γ))
-    return state
-end
-
-"""
 Modified IBProblem to include base state.  Only modification to the code
 is the direct product called by the `nonlinear!` function
 """
@@ -99,6 +49,7 @@ mutable struct LinearizedIBProblem <: AbstractIBProblem
     scheme::ExplicitScheme
     base_state::IBState
     QB::Array{Float64, 2}
+    ΓB::Array{Float64, 2}
     A
     Ainv
     Binv
@@ -129,6 +80,7 @@ mutable struct LinearizedIBProblem <: AbstractIBProblem
         for lev=1:prob.model.grid.mg
             prob.QB[:, lev] = copy(avg_flux(base_state, base_prob; lev=lev))
         end
+        prob.ΓB = copy(base_state.Γ)
 
         return prob
     end

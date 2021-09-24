@@ -6,5 +6,6 @@ Information about which files to include within this directory
 #include("motions.jl")  # Moved to structure-domain
 #include("bodies.jl")   # Moved to structure-domain
 include("models.jl")          # model, matrices, working memory
-include("problem-types.jl")   # problem, state, and base flux
+include("state-types.jl")     # flow state
+include("problem-types.jl")   # problem definition
 include("read-user-vars.jl")

@@ -5,8 +5,8 @@ using LinearAlgebra: norm  # FOR DEBUGGING
 
     Advance state forward in time.
 """
-function advance!(state::IBState{MultiGrid},
-                  prob::AbstractIBProblem,
+function advance!(state::IBState,
+                  prob::T where T<:AbstractIBProblem,
                   t::Float64)
     grid = prob.model.grid
     update_bodies!(state, prob, t)
@@ -58,7 +58,7 @@ Then do Ainv of that to back out trial circ
 """
 function get_trial_state!(qs::AbstractArray,
                           Γs::AbstractArray,
-                          state::IBState{MultiGrid},
+                          state::IBState,
                           prob::AbstractIBProblem)
     dt = prob.scheme.dt
     grid = prob.model.grid
@@ -176,7 +176,7 @@ end
 
 function project_circ!(::Type{V} where V<:Motion,
                        Γs::AbstractArray,
-                       state::IBState{MultiGrid},
+                       state::IBState,
                        prob::AbstractIBProblem)
     """
     High-level version:
@@ -208,7 +208,7 @@ end
 
 "Freestream flux for linearized problem (uniform zero)"
 function base_flux!(::Type{Static},
-                    state::IBState{MultiGrid},
+                    state::IBState,
                     prob::LinearizedIBProblem,
                     t::Float64)
     grid = prob.model.grid
@@ -223,7 +223,7 @@ end
 
 "Initialize irrotational freestream flux when not time-varying"
 function base_flux!(::Type{T} where T <: InertialMotion,
-                    state::IBState{MultiGrid},
+                    state::IBState,
                     prob::IBProblem,
                     t::Float64)
     grid = prob.model.grid
@@ -244,7 +244,7 @@ end
 
 "Update time-varying background flux for moving grid"
 function base_flux!(::Type{MovingGrid},
-                    state::IBState{MultiGrid},
+                    state::IBState,
                     prob::IBProblem,
                     t::Float64)
     @assert length(prob.model.bodies) == 1 # Assumes only one body
