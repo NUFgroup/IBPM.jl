@@ -82,6 +82,7 @@ mutable struct WorkingMemory
     q3::Array{Float64, 1}
     q4::Array{Float64, 1}
     q5::Array{Float64, 1}
+    q6::Array{Float64, 1}
     Γ1::Array{Float64, 2}
     Γ2::Array{Float64, 1}
     Γ3::Array{Float64, 1}

@@ -14,13 +14,13 @@ Compute average fluxes across cells
 
 Return views into working memory prob.model.work.q2
 """
-function avg_flux(state, prob; lev=1)
+function avg_flux(state::IBState, prob::IBProblem; lev=1)
    grid = prob.model.grid
    nx, ny = grid.nx, grid.ny
 
    # Get reshaped 2D views into flux
    qx, qy = grid.split_flux(state.q; lev=lev);
-   q0x, q0y = grid.split_flux(state.q0; lev=lev);  # Base flux from background flow (0 in stability analysis)
+   q0x, q0y = grid.split_flux(state.q0; lev=lev);  # Base flux from background flow
 
    # Same for working memory
    Q = prob.model.work.q2;  Q.*=0.0;
@@ -38,6 +38,33 @@ function avg_flux(state, prob; lev=1)
 end
 
 """
+Compute average fluxes across cells in linearized problem (no freestream)
+
+Return views into working memory prob.model.work.q2
+"""
+function avg_flux(state::IBState, prob::LinearizedIBProblem; lev=1)
+   grid = prob.model.grid
+   nx, ny = grid.nx, grid.ny
+
+   # Get reshaped 2D views into flux (note no background flux here)
+   qx, qy = grid.split_flux(state.q; lev=lev);
+
+   # Same for working memory
+   Q = prob.model.work.q2;  Q.*=0.0;
+   Qx, Qy = grid.split_flux(Q);
+
+   # Index into Qx from (1:nx+1)×(2:ny)
+   i=1:nx+1; j=2:ny
+   @views broadcast!(+, Qx[i,j], qx[i,j], qx[i,j.-1] )
+
+   # Index into Qy from (2:nx)×(1:ny+1)
+   i=2:nx; j=1:ny+1
+   @views broadcast!(+, Qy[i,j], qy[i,j], qy[i.-1,j] )
+
+   return Q
+end
+
+"""
    direct_product_loops!(fq, )
 """
 function direct_product_loops!(fq, Q, Γ, Γbc, grid, fq_tmp1, fq_tmp2)
@@ -46,7 +73,7 @@ function direct_product_loops!(fq, Q, Γ, Γbc, grid, fq_tmp1, fq_tmp2)
 
    Qx, Qy = grid.split_flux(Q)   # These are views into Q (though won't be changed here)
    fqx, fqy = grid.split_flux(fq);  # Views into fq - changing them will change fq
-   
+
    #-- Alias working memory
       fq_tmp1.*=0.0;
       fq1x, fq1y = grid.split_flux(fq_tmp1);  # Views of fq1 (which is not itself needed anywhere)
@@ -124,7 +151,6 @@ function direct_product!(fq, Q, Γ, Γbc, prob::LinearizedIBProblem)
    return nothing
 end
 
-
 """
     nonlinear!(nonlin, state, Γbc, lev, prob)
 """
@@ -132,7 +158,7 @@ function nonlinear!( nonlin::AbstractArray,
                      state::IBState{MultiGrid},
                      Γbc::AbstractArray,
                      lev::Int,
-                     prob::IBProblem )
+                     prob::AbstractIBProblem )
    """
    Note factor of 1/2 in boundary conditions absorbed to eliminate
    "lastbc" from Fortran code
@@ -145,12 +171,12 @@ function nonlinear!( nonlin::AbstractArray,
 
    # Don't need bc's for anything after this, so we can rescale in place
    Γbc .*= 0.25  # Account for scaling between grids
-   
+
    Γ = reshape(@view(state.Γ[:, lev]), nx-1, ny-1)  # Circulation at this grid level
    Q = avg_flux(state, prob; lev=lev)  # Compute average fluxes across cells
 
    fq = prob.model.work.q3; # Alias working memory
-   direct_product!(fq, Q, Γ, prob)  # Product of flux and circulation
+   direct_product!(fq, Q, Γ, Γbc, prob)  # Product of flux and circulation
 
    # Divergence of flux-circulation product
    mul!( nonlin, C', fq )

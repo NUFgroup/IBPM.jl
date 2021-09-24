@@ -1,12 +1,12 @@
 using LinearAlgebra: norm  # FOR DEBUGGING
 
 """
-    advance!(state::IBState, prob::IBProblem, t::Float64)
+    advance!(state::IBState, prob::AbstractIBProblem, t::Float64)
 
     Advance state forward in time.
 """
 function advance!(state::IBState{MultiGrid},
-                  prob::IBProblem,
+                  prob::AbstractIBProblem,
                   t::Float64)
     grid = prob.model.grid
     update_bodies!(state, prob, t)
@@ -59,7 +59,7 @@ Then do Ainv of that to back out trial circ
 function get_trial_state!(qs::AbstractArray,
                           Γs::AbstractArray,
                           state::IBState{MultiGrid},
-                          prob::IBProblem)
+                          prob::AbstractIBProblem)
     dt = prob.scheme.dt
     grid = prob.model.grid
     rhsbc = prob.model.work.rhsbc
@@ -169,7 +169,7 @@ This allows precomputing regularization and interpolation where possible.
 """
 function project_circ!(Γs::AbstractArray,
                        state::IBState,
-                       prob::IBProblem)
+                       prob::AbstractIBProblem)
     project_circ!(MotionType(prob.model.bodies), Γs, state, prob)
     return nothing
 end
@@ -177,7 +177,7 @@ end
 function project_circ!(::Type{V} where V<:Motion,
                        Γs::AbstractArray,
                        state::IBState{MultiGrid},
-                       prob::IBProblem)
+                       prob::AbstractIBProblem)
     """
     High-level version:
         Γ = Γs - Ainv * (E*C)'*F̃b
@@ -197,14 +197,28 @@ end
 
 
 """
-    base_flux!(state::IBState, prob::IBProblem, t::Float64)
+    base_flux!(state::IBState, prob::AbstractIBProblem, t::Float64)
 Set background flux based on `prob.model.bodies[].motion`
-Assumes same free-stream parameters for all motions (<-- CHANGE THIS)
 """
 function base_flux!(state::IBState,
-                    prob::IBProblem,
+                    prob::AbstractIBProblem,
                     t::Float64)
     base_flux!(MotionType(prob.model.bodies), state, prob, t)
+end
+
+"Freestream flux for linearized problem (uniform zero)"
+function base_flux!(::Type{Static},
+                    state::IBState{MultiGrid},
+                    prob::LinearizedIBProblem,
+                    t::Float64)
+    grid = prob.model.grid
+    nu = grid.ny*(grid.nx+1);  # Number of x-flux points
+
+    # Set all to zero since base flux is accounted for in base state
+    for lev = 1 : grid.mg
+        state.q0[ 1:nu, lev ] .= 0.0      # x-flux
+        state.q0[ nu+1:end, lev ] .= 0.0  # y-flux
+    end
 end
 
 "Initialize irrotational freestream flux when not time-varying"
@@ -287,7 +301,7 @@ Store surface stresses and integrated forces.
 Mutates "state"
 """
 function update_stress!(state::IBState,
-                        prob::IBProblem)
+                        prob::AbstractIBProblem)
     nb, nf = get_body_info(prob.model.bodies)
     h = prob.model.grid.h
     dt = prob.scheme.dt
@@ -317,7 +331,7 @@ end
 
 Update the immersed bodies and coupling matrices (if applicable).
 """
-function update_bodies!(state::IBState, prob::IBProblem, t::Float64)
+function update_bodies!(state::IBState, prob::AbstractIBProblem, t::Float64)
     update_bodies!(MotionType(prob.model.bodies), state, prob, t)
     return nothing
 end
@@ -325,7 +339,7 @@ end
 " No motion for static or moving grid cases "
 function update_bodies!(::Union{Type{Static}, Type{MovingGrid}},
                         state::IBState,
-                        prob::IBProblem,
+                        prob::AbstractIBProblem,
                         t::Float64)
     return nothing
 end

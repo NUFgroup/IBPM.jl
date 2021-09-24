@@ -16,7 +16,7 @@ using FileIO #For saving data as a jld2 file
     lengthscale = 0.5 #key lengthscale. e.g., for cylinder is radius. Supports Float64
     motion = :static #type of body motion. supports :static or a function of time
                      #default is static
-    center = [0.0; 0.74] #body CoM is centered here. default: [0.0; 0.0]
+    center = [0.0; 0.0] #body CoM is centered here. default: [0.0; 0.0]
                          #displace in y to trigger asymmetry
     body = [(type=type, lengthscale=lengthscale, motion=motion, center=center)]
 #--
@@ -27,7 +27,7 @@ using FileIO #For saving data as a jld2 file
                                 #functions of time
                                 #(default: (Ux=0.0, Uy=0.0, inclination=0.0))
 
-    T = 10.0 #final time to run to (default = 20.0*dt)
+    T = 1.0 #final time to run to (default = 20.0*dt)
 
     #simulation parameters (these are all optional)
     Δx = 0.02 #default (==missing) gives a grid Re of 2
@@ -99,5 +99,5 @@ using FileIO #For saving data as a jld2 file
                 xlims=(-4.0, 10.0), ylims=(-3.0, 3.0), clims=(-5.0, 5.0), clevs=40 )
             end
     #To save the animation, use gif():
-    gif(anim, "examples/cyl_100.gif", fps=10)
+    gif(anim, "cyl_100.gif", fps=10)
 #--

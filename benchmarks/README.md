@@ -11,7 +11,7 @@ Script to run the validation case is `cyl40.jl`.
 | MATLAB      | 700       |  1.5738  |
 | C++   | 1164      | 1.5320  |
 | Fortran |  800  |  1.5377953  |
-| Julia (Fortran port) | 471 | 1.5377938  |
+| Julia (Fortran port) | 392 | 1.5377938  |
 
 Single grid level:
 | Package      | Runtime (secs) |  $C_D$ |
