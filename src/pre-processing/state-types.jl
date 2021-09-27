@@ -4,12 +4,12 @@ State variables (stores everything needed for time stepping)
 """
 abstract type State end
 
-mutable struct IBState <: State
-    q::Array{Float64, 2}
-    q0::Array{Float64, 2}
-    Γ::Array{Float64, 2}     # Circulation
-    ψ::Array{Float64, 2}     # Streamfunction
-    nonlin::Array{Array{Float64, 2}, 1}  # Memory of nonlinear terms
+mutable struct IBState{T<:Number} <: State
+    q::Array{T, 2}
+    q0::Array{T, 2}
+    Γ::Array{T, 2}     # Circulation
+    ψ::Array{T, 2}     # Streamfunction
+    nonlin::Array{Array{T, 2}, 1}  # Memory of nonlinear terms
     fb::Array{Array{Float64, 2}, 1}          # Surface stresses
     F̃b::Array{Float64, 2}                    # Body forces * dt
     CD::Array{Float64, 1}    # Drag coefficient
@@ -17,7 +17,8 @@ mutable struct IBState <: State
     cfl::Float64
     slip::Float64
     xb::Array{Array{Float64, 2}, 1}
-    IBState() = new() # Default constructor (all undefined references)
+    IBState() = new{Float64}() # Default constructor (all undefined references)
+    IBState(::Type{T}) where T <: Number = new{T}() # Default constructor (all undefined references)
 end
 
 "Construct empty state from AbstractIBProblem"
@@ -45,7 +46,6 @@ function IBState(prob)
     return state
 end
 
-
 "Randomly initialize the vorticity of the IBState"
 function IBState(prob, noise_level::Number)
     state = IBState(prob)
@@ -53,13 +53,20 @@ function IBState(prob, noise_level::Number)
     return state
 end
 
-function Base.similar(v::IBState)
-    w = IBState()
-    w.q = similar(v.q)
-    w.q0 = similar(v.q0)
-    w.Γ = similar(v.Γ)
-    w.ψ  = similar(v.ψ)
-    w.nonlin = [similar(v.nonlin[i]) for i=1:length(v.nonlin)]
+function Base.similar(v::IBState{T}) where T
+    return similar(T, v)
+end
+
+function Base.similar(::Type{T}, v::IBState{V}) where {T<:Number, V<:Number}
+    # Will convert the field type if necessary (saves ops if not)
+    sim_field = (T==V) ? field -> similar(field) : field -> convert.(T, similar(field))
+
+    w = IBState(T)
+    w.q = sim_field(v.q)
+    w.q0 = sim_field(v.q0)
+    w.Γ = sim_field(v.Γ)
+    w.ψ  = sim_field(v.ψ)
+    w.nonlin = [sim_field(v.nonlin[i]) for i=1:length(v.nonlin)]
     w.fb = [similar(v.fb[i]) for i=1:length(v.fb)]
     w.F̃b = similar(v.F̃b)
     w.CD = similar(v.CD)
@@ -68,15 +75,58 @@ function Base.similar(v::IBState)
     return w
 end
 
-function Base.:*(α::Number, v::IBState)
-    w = similar(v)
-    w.Γ .*= α
-    w.q .*= α
-    w.ψ .*= α
-    return w
-end
-
 "Out of place scalar multiplication; multiply vector v with scalar α and store the result in w"
 function LinearAlgebra.mul!(w::IBState, v::IBState, α::Number)
-
+    broadcast!(x -> x*α, w.Γ, v.Γ)
+    broadcast!(x -> x*α, w.q, v.q)
+    broadcast!(x -> x*α, w.ψ, v.ψ)
+    for i=1:length(v.nonlin)
+        broadcast!(x -> x*α, w.nonlin[i], v.nonlin[i])
+    end
+    return nothing
 end
+
+"In-place scalar multiplication of v with α; in particular with α = false, v is the corresponding zero vector"
+function LinearAlgebra.rmul!(v::IBState, α::Number)
+    v.Γ .*= α
+    v.q .*= α
+    v.ψ .*= α
+    for i=1:length(v.nonlin)
+        v.nonlin[i] .*= α
+    end
+    return nothing
+end
+
+"multiply v with a scalar α, which can be of a different scalar type"
+function Base.:*(α::T, v::IBState{V}) where {T <: Number, V <: Number}
+    w = similar(T, v)
+    mul!(w, v, α)
+    return w
+end
+Base.:*(v::IBState{V}, α::T) where {T <: Number, V <: Number} = Base.:*(α, v)
+
+"store in w the result of α*v + β*w"
+function LinearAlgebra.axpby!(α::Number, v::IBState, β::Number, w::IBState)
+    rmul!(w, β/α)
+
+    w.q .+= v.q
+    w.Γ .+= v.Γ
+    w.ψ .+= v.ψ
+    for i=1:length(v.nonlin)
+        w.nonlin[i] .+= v.nonlin[i]
+    end
+
+    rmul!(w, α)
+    return nothing
+end
+
+"store in w the result of α*v + w"
+function LinearAlgebra.axpy!(α::Number, v::IBState, w::IBState)
+    LinearAlgebra.axpby!(α, v, one(α), w)
+end
+
+"compute the inner product (in kinetic energy) of two state"
+LinearAlgebra.dot(v::IBState, w::IBState) = dot(v.q, w.q)
+
+"compute the 2-norm (kinetic energy) of a state"
+LinearAlgebra.norm(v::IBState) = norm(v.q)
