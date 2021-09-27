@@ -2,12 +2,12 @@ include("../../src/ibpm.jl")
 
 
 # Define grid
-nx = 800  # num of x points on finest domain
-ny = 400  # num of y points on finest domain (length in y-dirn is len/m * n )
+nx = 400  # num of x points on finest domain
+ny = 200  # num of y points on finest domain (length in y-dirn is len/m * n )
 mg = 5   # num domains
-len = 16.0  # length of domain in x-direction
-offx = 4.0; # offset in x dirn (on fine domain, x-grid runs from -offx to len-offx.
-offy = 4.0; # offset in y dirn (same as offx but in y-dirn)
+len = 12.0  # length of domain in x-direction
+offx = 3.0; # offset in x dirn (on fine domain, x-grid runs from -offx to len-offx.
+offy = 3.0; # offset in y dirn (same as offx but in y-dirn)
 
 # MultiGrid
 grid = ibpm.make_grid(nx, ny, offx, offy, len; mg=mg)
@@ -25,7 +25,7 @@ cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0, motion),
         ibpm.make_cylinder( r, grid.h,  x0, -y0, motion)];
 
 # Create full IBPM problem
-Re = 20.0
+Re = 15.0
 dt = 5e-3
 
 prob = ibpm.init_prob(grid, cyls, Re, dt);
