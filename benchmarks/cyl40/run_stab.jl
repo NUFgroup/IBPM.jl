@@ -14,3 +14,6 @@ base_state, base_prob = nothing, nothing  # Free up memory
 
 ϵ = 1e-6   # Noise level for initial vorticity
 state = ibpm.IBState(prob, ϵ);
+
+using LinearMapss
+ibpm.advance!(state, prob, 0.0)

@@ -17,7 +17,6 @@ mutable struct SFDProblem <: AbstractIBProblem
     ib_prob::IBProblem
     model::IBModel
     scheme::ExplicitScheme
-    work::WorkingMemory
     A
     Ainv
     Binv
@@ -41,16 +40,15 @@ function init_sfd(prob::IBProblem,
     return SFDProblem(prob,
                       prob.model,
                       prob.scheme,
-                      prob.work,
                       prob.A,
                       prob.Ainv,
                       prob.Binv,
                       x̄, Δ, χ)
 end
 
-function advance!(t::Float64,
-                  state::IBState,
-                  sfd::SFDProblem)
+function advance!(state::IBState,
+                  sfd::SFDProblem,
+                  t::Float64)
     """
     Wrapper around the main time-stepper
     Note that since this updates the circulation after the KKT solver,
@@ -61,7 +59,7 @@ function advance!(t::Float64,
     β, dt = sfd.scheme.β, sfd.scheme.dt
 
     # Advance primary state
-    advance!(t, state, sfd.ib_prob)
+    advance!(state, sfd.ib_prob, t)
 
     # --- Update states ---
 
@@ -75,8 +73,8 @@ function advance!(t::Float64,
     end
 
     # Update primary state streamfunction and velocity flux
-    circ2_st_vflx!( state.ψ, state.q, state.Γ,
-                    sfd.ib_prob.model, sfd.ib_prob.model.grid.mg );
+    vort2flux!( state.ψ, state.q, state.Γ,
+                sfd.ib_prob.model, sfd.ib_prob.model.grid.mg );
 
     # Store filtered RHS for use in next time step
     for n=length(β):-1:2

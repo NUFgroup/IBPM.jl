@@ -18,6 +18,7 @@ include("pre-processing/pre-processing-include.jl")
 include("fluid-operators/fluid-operators-include.jl")
 include("timestepping/timestepping-include.jl")
 include("plotting/plotting-include.jl")
+include("experimental/sfd.jl")
 
 """
 Convenience function to solve the full problem and plot final solution
