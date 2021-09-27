@@ -7,7 +7,7 @@ state = ibpm.IBState(prob);
 χ = 3.0   # SFD filter width
 sfd_prob = ibpm.init_sfd(prob, state, Δ, χ)
 
-T = 100
+T = 10000
 t = 0:Δt:T
 
 sfd_tol = 1e-8
