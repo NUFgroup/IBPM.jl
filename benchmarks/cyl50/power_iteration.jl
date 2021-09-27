@@ -2,7 +2,7 @@ include("config.jl")  # Set up grid and other parameters
 
 # Load pre-computed DNS solution
 using FileIO
-data = load("dns_output.jld2")
+data = load("sfd_output.jld2")
 base_state = data["state"]
 
 # Construct the IBProblem corresponding to the DNS
@@ -15,5 +15,9 @@ base_state, base_prob = nothing, nothing  # Free up memory
 ϵ = 1e-6   # Noise level for initial vorticity
 state = ibpm.IBState(prob, ϵ);
 
-using LinearMapss
-ibpm.advance!(state, prob, 0.0)
+using LinearMaps
+#ibpm.advance!(state, prob, 0.0)
+
+T = 100
+t = 0:Δt:T
+run_sim(t, state, prob; output=20)
