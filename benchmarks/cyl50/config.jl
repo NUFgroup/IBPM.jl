@@ -9,8 +9,8 @@ mg = 4   # num domains
 grid =  ibpm.make_grid(Δx, boundary, mg=mg)
 
 # Other parameters
-Re = 100.0
-Δt = 5e-3
+Re = 50.0
+Δt = 1e-2
 
 Uinf = 1.0;   # Free-stream flow
 r = 0.5; # Cylinder radius
