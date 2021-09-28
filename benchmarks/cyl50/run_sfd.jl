@@ -25,4 +25,4 @@ runtime = @elapsed run_sim(t, state, sfd_prob; output=20, callback=sfd_callback)
 println(runtime)
 
 using FileIO
-FileIO.save("sfd_output.jld2",  "state", state)
+FileIO.save("benchmarks/cyl50/sfd_output.jld2",  "state", state)

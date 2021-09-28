@@ -53,6 +53,17 @@ function IBState(prob, noise_level::Number)
     return state
 end
 
+"Define the length of a state as the size of the circulation vector Γ"
+Base.length(v::IBState) = size(v.Γ, 1)
+
+"Copy all fields of v to w"
+function Base.copy!(w::IBState{T}, v::IBState{T}) where T
+    for name in fieldnames(typeof(v))
+        vfield, wfield = getfield(v, name), getfield(w, name)
+        vfield isa Number ? wfield = vfield : wfield .= vfield
+    end
+end
+
 function Base.similar(v::IBState{T}) where T
     return similar(T, v)
 end
@@ -61,7 +72,7 @@ function Base.similar(::Type{T}, v::IBState{V}) where {T<:Number, V<:Number}
     # Will convert the field type if necessary (saves ops if not)
     sim_field = (T==V) ? field -> similar(field) : field -> convert.(T, similar(field))
 
-    w = IBState(T)
+    w = IBState(T)  # All fields are :undef, can't be accessed with getfield
     w.q = sim_field(v.q)
     w.q0 = sim_field(v.q0)
     w.Γ = sim_field(v.Γ)
@@ -71,6 +82,7 @@ function Base.similar(::Type{T}, v::IBState{V}) where {T<:Number, V<:Number}
     w.F̃b = similar(v.F̃b)
     w.CD = similar(v.CD)
     w.CL = similar(v.CL)
+    w.xb = copy(v.xb)
     w.cfl, w.slip = 0.0, 0.0
     return w
 end
