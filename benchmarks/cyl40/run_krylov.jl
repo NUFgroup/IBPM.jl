@@ -31,11 +31,10 @@ using KrylovKit
 ϵ = 1e-6   # Noise level for initial vorticity
 x₀ = ibpm.IBState(prob, ϵ);
 
-
 T = 0.05
 t = 0:Δt:T
-sol = eigsolve(x₀, 2, :LM, verbosity=3, krylovdim=64, tol=1e-8, orth=ModifiedGramSchmidtIR()) do x
+sol = eigsolve(x₀, 2, :LM, verbosity=3, krylovdim=128, tol=1e-6, orth=ModifiedGramSchmidtIR()) do x
     y = deepcopy(x)
-    run_sim!(t, y, prob, output=5)
+    run_sim!(t, y, prob, output=50)
     return y
 end
