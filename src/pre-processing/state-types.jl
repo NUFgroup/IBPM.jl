@@ -50,18 +50,28 @@ end
 function IBState(prob, noise_level::Number)
     state = IBState(prob)
     state.Γ = noise_level*randn(size(state.Γ))
+    state.q = noise_level*randn(size(state.q))
     return state
 end
 
 "Define the length of a state as the size of the circulation vector Γ"
 Base.length(v::IBState) = size(v.Γ, 1)
 
-"Copy all fields of v to w"
+"Copy all fields of IBState v to w"
 function Base.copy!(w::IBState{T}, v::IBState{T}) where T
-    for name in fieldnames(typeof(v))
-        vfield, wfield = getfield(v, name), getfield(w, name)
-        vfield isa Number ? wfield = vfield : wfield .= vfield
+    # Matrices can be copied normally
+    for name in [:q, :q0, :Γ, :ψ, :F̃b, :CD, :CL]
+        copyto!( getfield(w, name), getfield(v, name) )
     end
+    # Arrays of arrays have to be copied by each element
+    for name in [:nonlin, :fb, :xb]
+        vfield, wfield = getfield(v, name), getfield(w, name)
+        for i=1:length(vfield)
+            copyto!(wfield[i], vfield[i])
+        end
+    end
+    w.cfl, w.slip = v.cfl, v.slip
+    return w
 end
 
 function Base.similar(v::IBState{T}) where T
@@ -95,7 +105,7 @@ function LinearAlgebra.mul!(w::IBState, v::IBState, α::Number)
     for i=1:length(v.nonlin)
         broadcast!(x -> x*α, w.nonlin[i], v.nonlin[i])
     end
-    return nothing
+    return w
 end
 
 "In-place scalar multiplication of v with α; in particular with α = false, v is the corresponding zero vector"
@@ -106,7 +116,7 @@ function LinearAlgebra.rmul!(v::IBState, α::Number)
     for i=1:length(v.nonlin)
         v.nonlin[i] .*= α
     end
-    return nothing
+    return v
 end
 
 "multiply v with a scalar α, which can be of a different scalar type"
@@ -129,12 +139,13 @@ function LinearAlgebra.axpby!(α::Number, v::IBState, β::Number, w::IBState)
     end
 
     rmul!(w, α)
-    return nothing
+    return w
 end
 
 "store in w the result of α*v + w"
 function LinearAlgebra.axpy!(α::Number, v::IBState, w::IBState)
     LinearAlgebra.axpby!(α, v, one(α), w)
+    return w
 end
 
 "compute the inner product (in kinetic energy) of two state"

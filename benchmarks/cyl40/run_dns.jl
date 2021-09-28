@@ -3,7 +3,7 @@ include("config.jl")  # Set up grid and other parameters
 prob = ibpm.IBProblem(grid, cyls, Δt, Re, freestream=freestream);
 
 state = ibpm.IBState(prob);
-T = 1
+T = 100
 t = 0:Δt:T
 
 run_sim(t[1:2], state, prob) # Pre-compile

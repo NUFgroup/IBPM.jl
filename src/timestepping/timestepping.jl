@@ -1,5 +1,32 @@
 using LinearAlgebra: norm  # FOR DEBUGGING
 
+
+"""
+advance!(y::IBState, x::IBState, prob::AbstractIBProblem, t::Float64)
+
+Advance state x forward in time and save in y
+"""
+function advance!(y::IBState,
+                  x::IBState,
+                  prob::T where T<:AbstractIBProblem,
+                  t::Float64)
+    copy!(y, x)  # Copy all fields over, can now mutate y
+    advance!(y, prob, t)
+end
+
+"""
+advance(x::IBState, prob::AbstractIBProblem, t::Float64)
+
+Advance state x forward in time (not mutating)
+"""
+function advance(x::IBState,
+                 prob::T where T<:AbstractIBProblem,
+                 t::Float64)
+    y = similar(x)
+    advance!(y, x, prob, t)
+    return y
+end
+
 """
     advance!(state::IBState, prob::AbstractIBProblem, t::Float64)
 
