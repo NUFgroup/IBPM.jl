@@ -6,7 +6,7 @@ data = load("benchmarks/cyl40/dns_output.jld2")
 base_state = data["state"]
 
 # Construct the IBProblem corresponding to the DNS
-Δt = 1e-6
+Δt = 2.5e-3
 base_prob = ibpm.IBProblem(grid, cyls, Δt, Re, freestream=freestream);
 
 # Construct the linearized problem
@@ -30,7 +30,12 @@ prob = ibpm.LinearizedIBProblem(base_state, base_prob, Δt)
 using KrylovKit
 ϵ = 1e-6   # Noise level for initial vorticity
 x₀ = ibpm.IBState(prob, ϵ);
-sol = eigsolve(x₀, verbosity=3) do x
-    y = ibpm.advance(x, prob, 0.0)
+
+
+T = 0.05
+t = 0:Δt:T
+sol = eigsolve(x₀, 2, :LM, verbosity=3, krylovdim=64, tol=1e-8, orth=ModifiedGramSchmidtIR()) do x
+    y = deepcopy(x)
+    run_sim!(t, y, prob, output=5)
     return y
 end
