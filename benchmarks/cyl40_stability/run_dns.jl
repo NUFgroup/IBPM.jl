@@ -13,4 +13,4 @@ runtime = @elapsed run_sim!(t, state, prob; output=20)
 println(runtime)
 
 using FileIO
-FileIO.save("benchmarks/cyl40/dns_output.jld2",  "state", state)
+FileIO.save("benchmarks/cyl40_stability/dns_output.jld2",  "state", state)
