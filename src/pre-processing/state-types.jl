@@ -148,8 +148,8 @@ function LinearAlgebra.axpy!(α::Number, v::IBState, w::IBState)
     return w
 end
 
-"compute the inner product (in kinetic energy) of two state"
-LinearAlgebra.dot(v::IBState, w::IBState) = dot(v.q, w.q)
+"compute the inner product (in kinetic energy) of two states"
+LinearAlgebra.dot(v::IBState, w::IBState) = dot(v.q[:, 1], w.q[:, 1])
 
 "compute the 2-norm (kinetic energy) of a state"
-LinearAlgebra.norm(v::IBState) = norm(v.q)
+LinearAlgebra.norm(v::IBState) = norm(v.q[:, 1])
