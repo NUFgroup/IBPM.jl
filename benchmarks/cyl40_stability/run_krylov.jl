@@ -41,4 +41,4 @@ x₀, 2, :LM, verbosity=3, krylovdim=128, tol=1e-6, orth=ModifiedGramSchmidt()
     return y
 end
 
-save("benchmarks/cyl40/krylov_output.jld2", "evals", evals, "evecs", evecs, "info", info)
+save("benchmarks/cyl40_stability/krylov_output.jld2", "evals", evals, "evecs", evecs, "info", info)
