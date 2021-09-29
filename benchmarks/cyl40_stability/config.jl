@@ -1,10 +1,10 @@
 include("../../src/ibpm.jl")
 
 # Define grid
-xlims = (-1.0, 3.0)
+xlims = (-1.0, 8.0)
 ylims = (-2.0, 2.0)
 boundary = (xlims..., ylims...) #left, right, bottom, and top of domain
-mg = 5   # num domains
+mg = 4   # num domains
 Δx = 0.02
 grid =  ibpm.make_grid(Δx, boundary, mg=mg)
 
