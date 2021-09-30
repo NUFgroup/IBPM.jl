@@ -1,17 +1,12 @@
 include("../../src/ibpm.jl")
 
-
 # Define grid
-nx = 400
-ny = 200
+xlims = (-1.5, 6.5)
+ylims = (-2.0, 2.0)
+boundary = (xlims..., ylims...) #left, right, bottom, and top of domain
 mg = 5   # num domains
-
-offx = 1.5; # offset in x dirn (on fine domain, x-grid runs from -offx to len-offx.
-offy = 2.0; # offset in y dirn (same as offx but in y-dirn)
-len = 8.0  # length of domain in x-direction
-
-# Initialize grid
-grid = ibpm.make_grid(nx, ny, offx, offy, len, mg=mg)
+Δx = 0.02
+grid =  ibpm.make_grid(Δx, boundary, mg=mg)
 
 # Other parameters
 Re = 100.0
@@ -24,3 +19,16 @@ L = 1.0   # Plate length
 # Initialize motion
 Uinf = 1.0;  # Free-stream velocity
 α = 0.0;
+
+ #freestream conditions
+freestream = (Ux=t->Uinf, Uy=t->0.0, inclination=t->α)
+
+function run_sim!(t, state, prob; output=1, callback=(state, prob)->nothing)
+	for i=1:length(t)
+		ibpm.advance!(state, prob, t[i])
+        if mod(i,output) == 0
+			callback(state, prob);  # Primitive callback, can be used for plotting or other output
+            @show (t[i], state.CD, state.CL, state.cfl)
+        end
+	end
+end
