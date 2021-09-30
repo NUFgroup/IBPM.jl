@@ -34,7 +34,7 @@ x₀ = ibpm.IBState(prob, ϵ);
 T = 0.1
 t = 0:Δt:T
 evals, evecs, info = eigsolve(
-x₀, 2, :LM, verbosity=3, krylovdim=128, tol=1e-6, orth=ModifiedGramSchmidt()
+x₀, 2, :LM, verbosity=3, krylovdim=128, tol=1e-8, orth=ModifiedGramSchmidt()
 ) do x
     y = deepcopy(x)
     run_sim!(t, y, prob, output=50)

@@ -6,7 +6,7 @@ using FileIO #For saving data as a jld2 file
 #all other variables have default values and needn't be provided the user
 
 #--necessary variables
-    boundary = (-1.0453, 3.15, -2.0148, 2.212) #left, right, bottom, and top of domain
+    boundary = (-1.0, 3.0, -2.0, 2.0) #left, right, bottom, and top of domain
     Re = 100.0 #Reynolds #
     # specify body as a vector of named tuples with keys type, lengthscale,
     #center, motion.
