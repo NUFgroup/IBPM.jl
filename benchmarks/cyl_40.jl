@@ -18,7 +18,7 @@ r = 0.5; # Cylinder radius
 grid = ibpm.make_grid(nx, ny, offx, offy, len, mg=mg)
 cyls = [ibpm.make_cylinder( r, grid.h, 0.0, 0.0 )]
 
-prob = ibpm.IBProblem(grid, cyls, Δt, Re, Uinf=Uinf, α=α);
+prob = ibpm.IBProblem(grid, cyls, Δt, Re, Uinf=Uinf, α=0.0);
 state = ibpm.IBState(prob);
 T = 100
 t = 0:Δt:T
