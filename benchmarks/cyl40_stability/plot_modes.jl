@@ -14,6 +14,6 @@ data = load("benchmarks/cyl40_stability/krylov_output.jld2")
 evals = data["evals"]
 evecs = data["evecs"]
 
-ω = reshape(evecs[2].Γ[:, 1], grid.nx-1, grid.ny-1) / grid.h^2
+ω = reshape(evecs[4].Γ[:, 1], grid.nx-1, grid.ny-1) / grid.h^2
 contourf(x, y, real.(ω)', c=cgrad(:seaborn_icefire_gradient),
         lw=0, levels=10, aspect_ratio=:equal)
