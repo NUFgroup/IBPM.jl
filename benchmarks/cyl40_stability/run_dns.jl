@@ -12,5 +12,7 @@ run_sim!(t[1:2], state, prob) # Pre-compile
 runtime = @elapsed run_sim!(t, state, prob; output=20)
 println(runtime)
 
+symmetrize!(state, grid)
+
 using FileIO
 FileIO.save("benchmarks/cyl40_stability/dns_output.jld2",  "state", state)

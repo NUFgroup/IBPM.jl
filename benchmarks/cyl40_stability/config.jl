@@ -29,3 +29,16 @@ function run_sim!(t, state, prob; output=1, callback=(state, prob)->nothing)
         end
 	end
 end
+
+function symmetrize!(state, grid)
+	sym(q)  = 0.5*(q .+ q[:, end:-1:1])
+	asym(q) = 0.5*(q .- q[:, end:-1:1])
+	for lev=1:grid.mg
+	    qx, qy = grid.split_flux(@view(state.q[:, lev]))
+	    Γ = reshape(@view(state.Γ[:, lev]), grid.nx-1, grid.ny-1)
+
+	    qx .=  sym(qx)
+	    qy .= asym(qy)
+	    Γ  .= asym(Γ)
+	end
+end
