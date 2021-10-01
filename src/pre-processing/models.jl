@@ -82,6 +82,7 @@ mutable struct WorkingMemory
     q3::Array{Float64, 1}
     q4::Array{Float64, 1}
     q5::Array{Float64, 1}
+    q6::Array{Float64, 1}
     Γ1::Array{Float64, 2}
     Γ2::Array{Float64, 1}
     Γ3::Array{Float64, 1}
@@ -96,6 +97,7 @@ mutable struct WorkingMemory
         work.q3 = zeros(grid.nq) # nonlinear
         work.q4 = zeros(grid.nq) # nonlinear
         work.q5 = zeros(grid.nq) # nonlinear
+        work.q6 = zeros(grid.nq) # Used for linear stability analysis
         work.Γ3 = zeros(grid.nΓ) # vort2flux
         work.Γbc = zeros(2*(grid.nx+1)+2*(grid.ny+1))
         work.rhsbc = zeros(grid.nΓ)

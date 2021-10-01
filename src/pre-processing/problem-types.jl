@@ -40,46 +40,48 @@ mutable struct IBProblem <: AbstractIBProblem
     end
 end
 
-
 """
-State variables (stores everything needed for time stepping)
+Modified IBProblem to include base state.  Only modification to the code
+is the direct product called by the `nonlinear!` function
 """
-abstract type State end
+mutable struct LinearizedIBProblem <: AbstractIBProblem
+    model::IBModel
+    scheme::ExplicitScheme
+    base_state::IBState
+    QB::Array{Float64, 2}
+    ΓB::Array{Float64, 2}
+    A
+    Ainv
+    Binv
+    """
+        LinearizedIBProblem(base_state, base_prob)
 
-mutable struct IBState{T<:Grid} <: State
-    q::Array{Float64, 2}
-    q0::Array{Float64, 2}
-    Γ::Array{Float64, 2}     # Circulation
-    ψ::Array{Float64, 2}     # Streamfunction
-    nonlin::Array{Array{Float64, 2}, 1}  # Memory of nonlinear terms
-    fb::Array{Array{Float64, 2}, 1}          # Surface stresses
-    F̃b::Array{Float64, 2}                    # Body forces * dt
-    CD::Array{Float64, 1}    # Drag coefficient
-    CL::Array{Float64, 1}    # Lift coefficient
-    cfl::Float64
-    slip::Float64
-    xb::Array{Array{Float64, 2}, 1}
-    function IBState(prob::IBProblem)
-        grid = prob.model.grid
-        nb, nf = get_body_info(prob.model.bodies)
+    Create a linearized problem from the base_state and associated IBProblem
 
-        state = new{typeof(grid)}()
-        state.q  = zeros(grid.nq, grid.mg)    # Flux
-        state.q0 = zeros(grid.nq, grid.mg)    # Background flux
-        state.Γ  = zeros(grid.nΓ, grid.mg)    # Circulation
-        state.ψ  = zeros(grid.nΓ, grid.mg)    # Streamfunction
-        state.nonlin = [zeros(grid.nΓ, grid.mg) for i=1:length(prob.scheme.β)]
-        state.fb = [zeros(nb[i], 2) for i=1:length(nf)]
-        state.F̃b = zeros(sum(nf), 1)
-        state.CD = zeros(length(prob.model.bodies))
-        state.CL = zeros(length(prob.model.bodies))
-        state.cfl, state.slip = 0.0, 0.0
+    NOTE: The `freestream` value in the nonlinear IBProblem will be incorrect
+        for the linearized case, but this field is not used in
+        base_flux!(..., prob::LinearizedIBProblem, ...)
+    """
+    function LinearizedIBProblem(
+                    base_state::IBState,
+                    base_prob::IBProblem,
+                    dt::Float64)
+        prob = new()
 
-        state.xb = [zeros(nb[i], 2) for i=1:length(nf)]
-        for j=1:length(prob.model.bodies)
-            state.xb[j] = prob.model.bodies[j].xb
+        prob.model = deepcopy(base_prob.model)
+        prob.scheme = AB2(dt)   # Explicit time-stepping for nonlinear terms
+        prob.A, prob.Ainv, prob.Binv = get_AB(prob.model, dt)
+        prob.base_state = deepcopy(base_state)
+
+        # Averaged base flux used in mean flow advection
+        #  Note this calls the IBProblem version of avg_flux, not Linearized
+        #  so that the "background" or free-stream flux is accounted for
+        prob.QB = zeros(prob.model.grid.nq, prob.model.grid.mg)
+        for lev=1:prob.model.grid.mg
+            prob.QB[:, lev] = copy(avg_flux(base_state, base_prob; lev=lev))
         end
-        base_flux!(state, prob, 0.0)  # Initialize base flux at time zero
-        return state
+        prob.ΓB = copy(base_state.Γ)
+
+        return prob
     end
 end
