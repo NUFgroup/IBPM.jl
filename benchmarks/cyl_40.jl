@@ -4,7 +4,8 @@ include("../src/ibpm.jl")
 xlims = (-1.0, 3.0)
 ylims = (-2.0, 2.0)
 boundary = (xlims..., ylims...) #left, right, bottom, and top of domain
-mg = 4   # num domains
+
+mg = 1   # num domains
 Δx = 0.02
 grid =  ibpm.make_grid(Δx, boundary, mg=mg)
 
@@ -33,7 +34,7 @@ end
 prob = ibpm.IBProblem(grid, cyls, Δt, Re, freestream=freestream);
 
 state = ibpm.IBState(prob);
-T = 100
+T = 10
 t = 0:Δt:T
 
 run_sim!(t[1:2], state, prob) # Pre-compile
