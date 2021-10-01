@@ -21,13 +21,13 @@ function make_plate(L, α, h, x0, y0; motion=Static(), n=0)
     end
 
     spt = L.*(0:(n-1))/(n-1);  # Range (0, L)
-    xhat = spt*cos.(-α);
-    yhat = spt*sin.(-α);
+    xhat = spt*cos.(-α)
+    yhat = spt*sin.(-α)
 
-    xb = [xhat.+x0  yhat.+y0];
+    xb = [xhat.+x0  yhat.+y0]
 
     # sanity check: make sure ds is equal to 2 * h
-    ds = sqrt( (xhat[2] - xhat[1])^2 + (yhat[2] - yhat[1])^2 ) ;
+    ds = sqrt( (xhat[2] - xhat[1])^2 + (yhat[2] - yhat[1])^2 )
 
     return RigidBody(motion, xb, copy(xb), 0.0*xb, fill(ds, n))
 end
@@ -48,18 +48,18 @@ function make_cylinder(r, h, x0, y0; motion=Static(), n=0)
 
     # Get # of points such that ds = 2h
     if (n==0)
-        n = Int( floor( circum / h / 2 ) );
+        n = Int( floor( circum / h / 2 ) )
     end
 
-    int =  2*π/n ;
-    spt = 0:int:(n-1)*int;
-    xhat = r.*cos.(spt);
-    yhat = r.*sin.(spt);
+    int =  2*π/n
+    spt = 0:int:(n-1)*int
+    xhat = r.*cos.(spt)
+    yhat = r.*sin.(spt)
 
-    xb = [xhat.+x0  yhat.+y0];
+    xb = [xhat.+x0  yhat.+y0]
 
     # sanity check: make sure ds is equal to 2 * h
-    ds = sqrt( (xhat[2] - xhat[1])^2 + (yhat[2] - yhat[1])^2 ) ;
+    ds = sqrt( (xhat[2] - xhat[1])^2 + (yhat[2] - yhat[1])^2 )
 
     return RigidBody(motion, xb, copy(xb), 0.0*xb, fill(ds, n))
 end
@@ -115,15 +115,15 @@ function naca(x, spec)
         yc[1:max_idx] .= (m/p^2).*(2*p.*x[1:max_idx] .- x[1:max_idx].^2)
         yc[max_idx+1:end] .= (m/(1-p)^2).*( 1-2*p .+ 2*p.*x[max_idx+1:end] .- x[max_idx+1:end].^2)
 
-        dyc_dx = zeros(size(x));
-        dyc_dx[1:max_idx] .= (2*m/p^2).*(p .- x[1:max_idx]);
-        dyc_dx[max_idx+1:end] .= (2*m/(1-p^2)).*(p .- x[max_idx+1:end]);
+        dyc_dx = zeros(size(x))
+        dyc_dx[1:max_idx] .= (2*m/p^2).*(p .- x[1:max_idx])
+        dyc_dx[max_idx+1:end] .= (2*m/(1-p^2)).*(p .- x[max_idx+1:end])
         θ = atan.(dyc_dx)
     else
         θ = zeros(size(x))
     end
 
-    yt = 5*t*(0.2969*sqrt.(x) - 0.1260.*x - 0.3516.*x.^2 + 0.2843.*x.^3 - 0.1036.*x.^4 );
+    yt = 5*t*(0.2969*sqrt.(x) - 0.1260.*x - 0.3516.*x.^2 + 0.2843.*x.^3 - 0.1036.*x.^4 )
 
     xU = x .- yt.*sin.(θ)
     xL = x .+ yt.*sin.(θ)
@@ -139,5 +139,5 @@ end
 Function naca(x, t) for points on symmetric 4-digit airfoils
 """
 function sym_naca(x, spec)
-    sym_naca(x, t) = 5*t*(0.2969*sqrt(x) - 0.1260*x - 0.3516*x^2 + 0.2843*x^3 - 0.1036*x^4 );
+    sym_naca(x, t) = 5*t*(0.2969*sqrt(x) - 0.1260*x - 0.3516*x^2 + 0.2843*x^3 - 0.1036*x^4 )
 end

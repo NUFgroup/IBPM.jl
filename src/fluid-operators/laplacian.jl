@@ -133,9 +133,33 @@ function get_Binv(model::IBModel{MultiGrid, RigidBody{MotionFunction}}, Ainv::Li
     B = LinearMap((f, g) -> B_times!(f, g, Ainv, model, Γ, ψ, q),
                   nftot; issymmetric=true, ismutating=true)
 
-    # solves f = B*g for g... so g = Binv * f
+    # solves B*f = g for f... so f = Binv * g
     Binv = LinearMap((f, g) -> cg!(f, B, g, maxiter=5000, reltol=1e-12),
                      nftot; issymmetric=true, ismutating=true)
+
+    return Binv
+end
+
+
+function get_Binv(model::IBModel{MultiGrid, DeformingBody{<:Motion}},
+    Ainv::LinearMap, Khatmat::Array{Float64,2}, QWmat::Array{Float64,2})
+
+    nb, nf = get_body_info(model.bodies)
+    nftot = sum(nf)
+
+    # TODO: Alternative... could create a dummy state to operate on here
+    Γ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for circulation
+    ψ = zeros(model.grid.nΓ, model.grid.mg)    # Working array for streamfunction
+    q = zeros(model.grid.nq, model.grid.mg)    # Working array for velocity flux
+
+    # f = B*g
+    B = LinearMap((f, g) -> B_times!(f, g, Ainv, model, Γ, ψ, q),
+                  nftot; issymmetric=true, ismutating=true)
+
+    # solves B*f = g for f... so f = Binv * g
+    Binv = LinearMap((f, g) -> bicgstabl!(f, B+Khatmat*QWmat,
+                    g, maxiter=5000, reltol=1e-12),
+                    nftot; issymmetric=false, ismutating=true)
 
     return Binv
 end

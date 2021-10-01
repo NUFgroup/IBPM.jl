@@ -1,5 +1,7 @@
 """
-Types of motion a body can undergo
+Types of prescribed motion a body can undergo
+
+There can be additional FSI dynamics
 """
 abstract type Motion end
 
@@ -15,12 +17,6 @@ mutable struct MotionFunction <: InertialMotion
     xc::Any                  # Center position [x, y, θ] = xc(t)
     uc::Any                  # Center velocity [ẋ, ẏ, θ̇] = uc(t)
 end
-
-#Deprecated??
-# "Rotating cylinder-specific type"
-# struct RotatingCyl <: InertialMotion
-#     Ω::Float64               # Angular velocity (constant)
-# end
 
 #Case 2: user prescribes body motion by moving the grid and adding the necessary
 #   inertial terms.

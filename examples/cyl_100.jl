@@ -10,8 +10,7 @@ using FileIO #For saving data as a jld2 file
     Re = 100.0 #Reynolds #
     # specify body as a vector of named tuples with keys type, lengthscale,
     #center, motion.
-    #Type and lengthscale must be specified. The others have defaults associated
-    #with a stationary body centered at (x,y)=(0.0,0.0)
+    #Type and lengthscale must be specified. The others have defaults associated #with a stationary body centered at (x,y)=(0.0,0.0)
     type = :cylinder #:cylinder, :plate are supported
     lengthscale = 0.5 #key lengthscale. e.g., for cylinder is radius. Supports Float64
     motion = :static #type of body motion. supports :static or a function of time
@@ -27,7 +26,7 @@ using FileIO #For saving data as a jld2 file
                                 #functions of time
                                 #(default: (Ux=0.0, Uy=0.0, inclination=0.0))
 
-    T = 10.0 #final time to run to (default = 20.0*dt)
+    T = 0.1 #final time to run to (default = 20.0*dt)
 
     #simulation parameters (these are all optional)
     Δx = 0.02 #default (==missing) gives a grid Re of 2
@@ -92,12 +91,12 @@ using FileIO #For saving data as a jld2 file
     ibpm.plot_state( prob, data[2].val[end], data[2].t[end], var=:omega,
         xlims=(-4.0, 10.0), ylims=(-3.0, 3.0), clims=(-5.0, 5.0), clevs=40)
 
-    #We can also use Julia's handy @animate macro to make a gif of the vorticity
-    # field from our save data:
-    anim = @animate for j = 1 : length(data[2].t)
-                ibpm.plot_state( prob, data[2].val[j], data[2].t[j], var=:omega,
-                xlims=(-4.0, 10.0), ylims=(-3.0, 3.0), clims=(-5.0, 5.0), clevs=40 )
-            end
-    #To save the animation, use gif():
-    gif(anim, "examples/cyl_100.gif", fps=10)
+    # #We can also use Julia's handy @animate macro to make a gif of the vorticity
+    # # field from our save data:
+    # anim = @animate for j = 1 : length(data[2].t)
+    #             ibpm.plot_state( prob, data[2].val[j], data[2].t[j], var=:omega,
+    #             xlims=(-4.0, 10.0), ylims=(-3.0, 3.0), clims=(-5.0, 5.0), clevs=40 )
+    #         end
+    # #To save the animation, use gif():
+    # gif(anim, "examples/cyl_100.gif", fps=10)
 #--

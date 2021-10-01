@@ -16,6 +16,7 @@ include("structure-domain/structure-domain-include.jl")
 include("interface-coupling/interface-coupling-include.jl")
 include("pre-processing/pre-processing-include.jl")
 include("fluid-operators/fluid-operators-include.jl")
+include("structure-operators/structure-operators-include.jl")
 include("timestepping/timestepping-include.jl")
 include("plotting/plotting-include.jl")
 
@@ -37,26 +38,12 @@ function IBPM_advance(Re, boundary, body, freestream=(Ux=t->0.0,);
     #--
 
     #-build body
-        #@aditya: made a template function make_body
-        #(in structure-domain/bodies.jl) that makes a body using some flags
-        #specified by the user. The function is a wrapper that calls routines
-        #within sample-bodies.jl. make_body does not support calling make_naca
-        #because
-        #    (1) that function defines the airfoil using the number of body
-        #       points as the user prescribed variable, rather than \Delta x
-        #    (2) the function doesn't allow for AoA to be specified.
-        #It would be nice to address (1) and (2) and let the user have a naca
-        #airfoil be made by specifying the type key as :naca, and perhaps adding
-        #new key, params, with subkeys spec (e.g. params.spec="0012" for a
-        #NACA0012) and \alpha.
-        #Would be nice to also modify the file to allow the user to
-        #specify the body as a function of the arc-length s.
         body = make_body( body, Δx )
     #--
 
 	#--Initialize problem types and models
-	    prob = IBProblem(grid, body, Δt, Re, freestream=freestream);
-	    state = IBState(prob);
+	    prob = IBProblem(grid, body, Δt, Re, freestream=freestream)
+	    state = IBState(prob)
 	#--
 
 	#Time over which simulation will be run
@@ -66,25 +53,11 @@ function IBPM_advance(Re, boundary, body, freestream=(Ux=t->0.0,);
 	data = init_save_data( t, save_info, state )
 
 	#run simulation over desired time window
-    # run_sim(t[1:2], state, prob) # Pre-compilation for benchmarking
     runtime = @elapsed run_sim!(t, state, prob, data=data) #advance to final time
 
     return prob, data, runtime
 end
 
-"""
-compute_cfl(state, prob)
-
-Compute the CFL number (uΔt/Δx) based on the fine-grid flux
-
-Note that this uses working memory that is also used in `nonlinear!`
-"""
-function compute_cfl(state, prob)
-	Δt, Δx = prob.scheme.dt, prob.model.grid.h
-	qwork = prob.model.work.q5
-	@views @. qwork = abs( state.q[:, 1] )
-	return maximum(qwork)*Δt/Δx
-end
 
 function run_sim!(t, state, prob;
 	display_freq=25,
@@ -104,4 +77,4 @@ function run_sim!(t, state, prob;
 	end
 end
 
-end
+end #module

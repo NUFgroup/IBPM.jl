@@ -76,6 +76,7 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
     xb = vcat( [body.xb for body in bodies]...)
     nb = size(xb, 1)
     nf = 2*nb
+    ds = vcat([body.ds for body in bodies]...)
 
     supp_idx = -supp:supp;
     #l=supp_idx.+(supp+1); m=supp_idx'.+(supp+1)  # Shift indices to index into "weight" at 1
@@ -133,5 +134,79 @@ function setup_reg( grid::T, bodies::Array{<:Body, 1}; supp=6 ) where T <: Grid
     end
 
     E = LinearMap( regT!, reg!, nf, grid.nq; ismutating=true  )
-    return E
+
+
+    function redistribution_wghts!(qout, qin)
+
+        wghts = E'*ones(nf)
+        wghts[wghts.>1.0e-10].=1.0./wghts[wghts.>1.0e-10]
+        wghts[wghts.<1.0e-10].=0.0
+
+        qout = E*(wghts.*(E'*qin))
+        qout[1:nb] = qout[1:nb] .* h./ds
+        qout[nb+1:nf] = qout[nb+1:nf] .* h./ds
+        
+        return nothing
+    end
+
+
+    W = LinearMap(redistribution_wghts!, nf, nf)
+
+
+
+    return E, W
+end
+
+"""
+Linear map for relating structure unknowns on surface (e.g., for EB beam
+    x,y,theta unknowns organized in that order per node) to flow unknowns on
+    surface (e.g., for stresses x and y stresses organized as all x stresses
+    first, then all y stresses)
+"""
+function structure_2_fluid_indices(bodies::Array{<:Body, 1})
+
+    #If there's a deforming body, there can only be one body (for now...)
+    btypes = [typeof(bodies[i]) for i=1:length(bodies)]
+    if sum(btypes .<: DeformingBody) > 0
+        @show cp = 1
+        @assert length(bodies) == 1
+    end
+
+    #get structural matrices (or fill with Missing if rigid body/ies)
+    structure_2_fluid_indices(typeof(bodies[1]), bodies[1])
+end
+
+function structure_2_fluid_indices(::Type{RigidBody{W}} where W <: Motion, body)
+    return missing
+end
+
+function structure_2_fluid_indices(::Type{DeformingBody{W}} where W <: Motion, body)
+
+    #doesn't work for multiple bodies
+    nb = length( body.xb[:,1])
+
+    function inds_str2fl!( F_sm, F_bg )
+
+        F_sm = zeros(2*nb)
+        for j = 1: nb
+            F_sm[j] = F_bg[3*(j-1) +1]
+            F_sm[nb+j] = F_bg[3*(j-1) +2]
+        end
+
+        return nothing
+    end
+
+    function inds_fl2str!( F_bg, F_sm )
+
+        F_bg = zeros(3*nb)
+        for j = 1:nb
+            F_bg[3*(j-1)+1] = F_sm[j]
+            F_bg[3*(j-1)+2] = F_sm[nb+j]
+        end
+
+        return nothing
+    end
+
+    Ĩ = LinearMap( inds_str2fl!, inds_fl2str!, 2*nb, 3*nb; ismutating=true  )
+    return Ĩ
 end

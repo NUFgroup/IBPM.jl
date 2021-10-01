@@ -137,7 +137,6 @@ function make_body( bdy_in, Δx )
         end
 
         bodies = [bodies; body]
-        # bodies=[body]
     end
 
     return bodies

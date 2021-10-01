@@ -30,6 +30,11 @@ mutable struct IBMatrices
     Δinv::LinearMap
     E::LinearMap
     dst_plan::Any
+    Ks::Union{Array{Float64, 2}, Missing}
+    Ms::Union{Array{Float64, 2}, Missing}
+    Qs::Union{Array{Float64, 2}, Missing} #might eventually want linear map but array good for now
+    Ĩ::Union{LinearMap, Missing}
+    W::LinearMap
     function IBMatrices(grid::T, bodies::Array{V, 1}) where T <: Grid where V <: Body
         mats = new()
         Γwork = zeros(grid.nx-1, grid.ny-1)
@@ -46,7 +51,10 @@ mutable struct IBMatrices
         mats.Δinv = get_lap_inv(grid, mats.Λ, mats.dst_plan)
 
         # Interpolation/regularization matrix
-        mats.E = ibpm.setup_reg(grid, bodies)   # interface-coupling/interface-oupling.jl
+        mats.E, mats.W = setup_reg(grid, bodies)   # interface-coupling/interface-coupling.jl
+
+        mats.Ks, mats.Ms, mats.Qs = get_structural_mats(bodies)
+        mats.Ĩ = structure_2_fluid_indices(bodies)
         return mats
     end
 end
@@ -123,8 +131,7 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
                      bodies::Array{V, 1},
                      Re::Number;
                      freestream=(Ux=0.0, Uy=0.0, inclination=0.0),
-                     xc=0.0,
-                     yc=0.0) where {T <: Grid, V <: Body}
+                     xc=0.0, yc=0.0) where {T <: Grid, V <: Body}
         mats = IBMatrices(grid, bodies)
         work = WorkingMemory(grid)
 
@@ -152,6 +159,7 @@ struct IBModel{T <: Grid, V <: Body} <: SolnModel
         else
             XX, YY = nothing, nothing
         end
-        return new{T, V}(grid, bodies, Float64(Re), freestream, mats, work, XX, YY)
+        return new{T, V}(grid, bodies, Float64(Re), freestream, mats, work,
+            XX, YY)
     end
 end

@@ -59,6 +59,11 @@ mutable struct IBState{T<:Grid} <: State
     cfl::Float64
     slip::Float64
     xb::Array{Array{Float64, 2}, 1}
+    ub::Array{Array{Float64, 2}, 1}
+    χ::Array{Array{Float64, 2}, 1} #structural (deformation) displacements
+    ζ::Array{Array{Float64, 2}, 1} #structural (deformation) velocities
+    ζ̇::Array{Array{Float64, 2}, 1} #structural (deformation) accels
+    
     function IBState(prob::IBProblem)
         grid = prob.model.grid
         nb, nf = get_body_info(prob.model.bodies)
@@ -76,9 +81,14 @@ mutable struct IBState{T<:Grid} <: State
         state.cfl, state.slip = 0.0, 0.0
 
         state.xb = [zeros(nb[i], 2) for i=1:length(nf)]
+        state.ub = [zeros(nb[i], 2) for i=1:length(nf)]
         for j=1:length(prob.model.bodies)
             state.xb[j] = prob.model.bodies[j].xb
+            state.ub[j] = prob.model.bodies[j].ub
         end
+        state.χ = [zeros(nb[i], 3) for i=1:length(nf)]
+        state.ζ = [zeros(nb[i], 3) for i=1:length(nf)]
+        state.ζ̇ = [zeros(nb[i], 3) for i=1:length(nf)]
         base_flux!(state, prob, 0.0)  # Initialize base flux at time zero
         return state
     end

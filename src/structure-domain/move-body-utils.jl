@@ -25,6 +25,19 @@ function MotionType( bodies::Array{V, 1} where V<:Body )
     end
 end
 
+function BodyType( body::V where V<:Body )
+    return typeof(body)
+end
+
+function BodyType( bodies::Array{V, 1} where V<:Body )
+    btypes = [typeof(bodies[i]) for i=1:length(bodies)]
+    if all(btypes .== btypes[1])
+        return btypes[1]
+    else
+        return Body
+    end
+end
+
 function get_body_info( bodies::Array{V, 1} where V <: Body )
     # determine the num of body points per body
     nf = [length(bodies[j].xb) for j=1:length(bodies)]
@@ -96,29 +109,6 @@ end
 function move_body!(body::RigidBody, t::Float64)
     move_body!(MotionType(body), body, t)
 end
-
-#DEPRECATED???
-# function move_body!(
-#     ::Type{RotatingCyl},
-#     body::RigidBody,
-#     t::Float64
-#     )
-#     """
-#     Compute linear speed of points on rotating cylinder
-#     θ = atan(y/x)
-#     ẋ = -R*Ω*sin(θ)
-#     ẏ =  R*Ω*cos(θ)
-#     Note: this is a specialized case for development only
-#     """
-#     xb = body.xb
-#     ub = body.ub
-#     motion = body.motion
-#     R = sqrt(xb[1, 1]^2 + xb[1, 2]^2)
-#     θ = atan.(xb[:, 2], xb[:, 1])
-#     ub[:, 1] .= -R*motion.Ω*sin.(θ)
-#     ub[:, 2] .=  R*motion.Ω*cos.(θ)
-#     return ub
-# end
 
 function move_body!(
     ::Type{MotionFunction},
